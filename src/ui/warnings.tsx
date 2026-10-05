@@ -43,22 +43,44 @@ export function WarningPanel(props: { entries: WarnEntry[]; ack: boolean; onAck:
   if (!flagged.length) return null;
   const danger = needsAck(flagged);
   return (
-    <div className={`mt-4 rounded-lg border p-3 ${danger ? "border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40" : "border-amber-300 bg-amber-50 dark:border-amber-800 dark:bg-amber-950/40"}`}>
-      <div className="mb-2 flex items-center gap-2 font-semibold"><Icon name="alert" className="h-4 w-4" />{danger ? "Some of these may be required" : "Please check before continuing"}</div>
-      <ul className="max-h-44 space-y-2 overflow-auto text-xs">
+    <div className={`mt-4 rounded-[10px] border p-3 ${danger ? "border-red-300 bg-red-50 dark:border-red-800/70 dark:bg-red-950/30" : "border-amber-300 bg-amber-50 dark:border-amber-800/70 dark:bg-amber-950/30"}`}>
+      <div className="mb-2 flex items-center gap-2 font-semibold"><Icon name="alert" className="h-4 w-4" />{danger ? "Some selected folders may be required" : "Check these before continuing"}</div>
+      <ul className="max-h-44 space-y-2.5 overflow-auto text-[13px]">
         {flagged.map((e) => (
           <li key={e.path}>
-            <div className="break-all font-mono">{e.label}</div>
-            {e.warnings.map((w, i) => <div key={i} className="ml-3 mt-0.5 opacity-90">{w.level === "danger" ? "Danger: " : "Check: "}{w.message}</div>)}
+            {e.warnings.map((w, i) => <div key={i} className="flex gap-1.5"><span className="font-bold">{w.level === "danger" ? "!" : "•"}</span><span>{w.message}</span></div>)}
+            <div className="mono mt-0.5 break-all text-xs opacity-80">{e.label}</div>
           </li>
         ))}
       </ul>
       {danger && !props.dryRun && (
-        <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs font-medium">
+        <label className="mt-3 flex cursor-pointer items-start gap-2 text-[13px] font-medium">
           <input type="checkbox" className="cb mt-0.5" checked={props.ack} onChange={(e) => props.onAck(e.target.checked)} />
-          I understand this may remove something I need and cannot easily get back.
+          <span>I understand this may remove something I need<br />and cannot easily get back.</span>
         </label>
       )}
     </div>
   );
+}
+
+/** Plain-language safety summary for the details panel: rebuildable, git state, and every warning. */
+export function SafetyList(props: { gitIgnored: boolean | null; gitTracked: boolean | null; warnings: Warning[]; regenerates: string }) {
+  const row = (tone: "ok" | "warn" | "bad", text: string, sub?: string) => (
+    <li key={text} className="flex gap-2 text-[13px]">
+      <Icon name={tone === "ok" ? "check-circle" : "alert"} className={`mt-0.5 h-4 w-4 shrink-0 ${tone === "ok" ? "text-emerald-600 dark:text-emerald-400" : tone === "warn" ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`} />
+      <span><span className="font-medium">{text}</span>{sub && <span className="muted block text-xs">{sub}</span>}</span>
+    </li>
+  );
+  const items = [];
+  if (props.gitTracked) items.push(row("bad", "Git tracks files inside this folder", "Removing it deletes committed files."));
+  else if (props.gitIgnored === true) items.push(row("ok", "Git ignored"));
+  else if (props.gitIgnored === false) items.push(row("warn", "Not Git ignored", "Check that this folder only contains generated files."));
+  const bad = props.warnings.some((w) => w.level === "danger");
+  if (!bad && !props.gitTracked) items.push(row("ok", "Rebuildable", `Comes back with ${props.regenerates}.`));
+  for (const w of props.warnings) {
+    if (props.gitTracked && w.message.startsWith("Git tracks")) continue;
+    if (props.gitIgnored === false && w.message.startsWith("This folder is not listed in .gitignore")) continue;
+    items.push(row(w.level === "danger" ? "bad" : "warn", w.level === "danger" ? "May be required" : "Check first", w.message));
+  }
+  return <ul className="space-y-2">{items}</ul>;
 }

@@ -4,65 +4,43 @@ import { Icon } from "../ui/Icon";
 import { Badge, Checkbox, SizeBar } from "../ui/primitives";
 import { WarnBadge } from "../ui/warnings";
 
-/** Column layout shared by every list in the app so rows line up. The first column holds the tree. */
-export const GRID = "grid grid-cols-[minmax(0,1fr)_6.5rem_8rem_4.5rem_6.5rem_9rem] items-center gap-x-3 pr-3";
-
 /** Tree geometry in px: left padding, indent per level, chevron slot, gap, checkbox. */
 const PAD = 12;
 const STEP = 40;
-const CHEV = 18;
-const GAP = 6;
+const CHEV = 20;
+const GAP = 8;
 const BOX = 16;
 const guideX = (level: number) => PAD + level * STEP + CHEV + GAP + BOX / 2;
+const indent = (depth: number) => ({ paddingLeft: PAD + depth * STEP });
 
 /** Vertical lines drawn behind a row, one per ancestor level, so the hierarchy reads at a glance. */
 function Guides({ depth }: { depth: number }) {
   return (
     <>
       {Array.from({ length: depth }, (_, l) => (
-        <span key={l} aria-hidden className="pointer-events-none absolute inset-y-0 w-px bg-slate-300 dark:bg-slate-600" style={{ left: guideX(l) }} />
+        <span key={l} aria-hidden className="pointer-events-none absolute inset-y-0 w-px bg-slate-200 dark:bg-slate-700" style={{ left: guideX(l) }} />
       ))}
     </>
   );
 }
 
-const indent = (depth: number) => ({ paddingLeft: PAD + depth * STEP });
-
 export interface RowModel {
   key: string;
   name: string;
-  /** Muted second line, usually the folder path. */
-  sub: string;
-  typeLabel: string;
+  /** One plain sentence about what it is. */
+  desc: string;
+  /** Muted extra detail such as the ecosystem and file count. */
+  meta?: string;
   bytes: number;
-  files: number;
-  modified: number;
   parts: Part[];
-  status: ReactNode;
+  /** Badges shown beside the name (warnings, protected, view only). */
+  badges?: ReactNode;
   protected?: boolean;
   /** Why the whole row cannot be ticked (view-only items, or items removable only in parts). */
   lockedReason?: string;
   viewOnly?: boolean;
-  dim?: boolean;
-}
-
-export function ListHeader(props: { columns: { label: string; align?: "right"; sortKey?: string }[]; sortKey?: string; desc?: boolean; onSort?: (k: string) => void; allChecked?: boolean; someChecked?: boolean; onToggleAll?: () => void }) {
-  const [first, ...rest] = props.columns;
-  const sortBtn = (c: (typeof props.columns)[number]) => (
-    <button key={c.label} disabled={!c.sortKey} onClick={() => c.sortKey && props.onSort?.(c.sortKey)} className={`flex items-center gap-1 ${c.align === "right" ? "justify-end" : ""} ${c.sortKey ? "cursor-pointer hover:text-slate-900 dark:hover:text-white" : "cursor-default"}`}>
-      {c.label}
-      {c.sortKey && props.sortKey === c.sortKey && <Icon name="chevron-down" className={`h-3 w-3 ${props.desc ? "" : "rotate-180"}`} />}
-    </button>
-  );
-  return (
-    <div className={`${GRID} sticky top-0 z-10 border-b-2 bg-slate-200 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600 divider dark:bg-slate-800 dark:text-slate-300`}>
-      <div className="flex items-center" style={{ paddingLeft: PAD + CHEV + GAP, gap: GAP }}>
-        {props.onToggleAll ? <Checkbox checked={!!props.allChecked} indeterminate={props.someChecked} onChange={props.onToggleAll} label="Select all" /> : <span style={{ width: BOX }} />}
-        {sortBtn(first)}
-      </div>
-      {rest.map(sortBtn)}
-    </div>
-  );
+  /** Cells for the compact Flat table (type and project). */
+  flat?: { type: string; project: string };
 }
 
 export function TreeRow(props: {
@@ -86,75 +64,84 @@ export function TreeRow(props: {
   const m = props.model;
   const depth = props.depth ?? 0;
   const hasParts = m.parts.length > 0;
+  const locked = m.protected || !!m.lockedReason;
   return (
     <div className="border-b divider">
       <div
         onClick={props.onFocus}
-        className={`${GRID} relative cursor-pointer py-2.5 transition-colors hover:bg-slate-100 dark:hover:bg-slate-800/60 ${props.focused ? "bg-emerald-50 dark:bg-emerald-950/40" : "bg-white dark:bg-slate-900"} ${m.dim ? "opacity-60" : ""}`}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key === "Enter") { e.preventDefault(); props.onFocus(); }
+          if (e.key === " " && !locked) { e.preventDefault(); props.onToggle(); }
+          if (e.key === "ArrowRight" && hasParts && !props.expanded) props.onExpand();
+          if (e.key === "ArrowLeft" && hasParts && props.expanded) props.onExpand();
+        }}
+        tabIndex={0}
+        data-row
+        aria-label={`${m.name}, ${fmtBytes(m.bytes)}`}
+        className={`relative flex cursor-pointer items-center gap-3 py-2.5 pr-4 outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 hover:bg-slate-50 dark:hover:bg-slate-800/50 ${props.focused ? "bg-indigo-50 dark:bg-indigo-500/10" : ""}`}
+        style={indent(depth)}
       >
         <Guides depth={depth} />
-        <div className="relative flex min-w-0 items-start" style={{ ...indent(depth), gap: GAP }}>
+        <div className="relative flex min-w-0 flex-1 items-center" style={{ gap: GAP }}>
           <span className="flex shrink-0 justify-center" style={{ width: CHEV }}>
             {hasParts && (
-              <button className="mt-px rounded p-0.5 text-slate-500 hover:bg-slate-200 dark:text-slate-300 dark:hover:bg-slate-700" aria-expanded={props.expanded} aria-label={props.expanded ? "Hide parts" : "Show parts"} onClick={(e) => { e.stopPropagation(); props.onExpand(); }}>
+              <button tabIndex={-1} className="rounded p-0.5 text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700" aria-expanded={props.expanded} aria-label={props.expanded ? "Hide parts" : "Show parts"} onClick={(e) => { e.stopPropagation(); props.onExpand(); }}>
                 <Icon name={props.expanded ? "chevron-down" : "chevron-right"} className="h-3.5 w-3.5" />
               </button>
             )}
           </span>
-          <span className="mt-0.5 shrink-0">
-            <Checkbox checked={props.checked} indeterminate={props.partial} disabled={m.protected || !!m.lockedReason} onChange={props.onToggle} label={`Select ${m.name}`} title={m.lockedReason ?? (m.protected ? "Protected paths cannot be removed" : undefined)} />
-          </span>
-          <div className="min-w-0">
+          <Checkbox checked={props.checked} indeterminate={props.partial} disabled={locked} onChange={props.onToggle} label={`Select ${m.name}`} title={m.lockedReason ?? (m.protected ? "Protected paths cannot be removed" : undefined)} />
+          <Icon name="folder" className="h-[18px] w-[18px] shrink-0 text-slate-400" />
+          <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate font-medium">{m.name}</span>
+              <span className={`truncate font-medium ${m.viewOnly ? "text-slate-600 dark:text-slate-300" : ""}`}>{m.name}</span>
               {hasParts && <Badge icon="layers" title="Can be removed part by part">{m.parts.length} parts</Badge>}
+              {m.badges}
             </div>
-            <div className="muted truncate text-xs" title={m.sub}>{m.sub}</div>
+            <div className="muted truncate text-[13px]" title={m.desc}>{m.desc}{m.meta ? <span className="faint"> · {m.meta}</span> : null}</div>
           </div>
         </div>
-        <div className="truncate text-slate-600 dark:text-slate-300">{m.typeLabel}</div>
-        <div>
+        {m.flat && (
+          <>
+            <div className="muted hidden w-28 shrink-0 truncate text-[13px] min-[1000px]:block">{m.flat.type}</div>
+            <div className="muted hidden w-36 shrink-0 truncate text-[13px] min-[1100px]:block" title={m.flat.project}>{m.flat.project}</div>
+          </>
+        )}
+        <div className="w-28 shrink-0">
           <div className="text-right font-medium tabular-nums">{fmtBytes(m.bytes)}</div>
           <SizeBar fraction={props.maxBytes ? m.bytes / props.maxBytes : 0} />
         </div>
-        <div className="muted text-right tabular-nums">{m.files.toLocaleString()}</div>
-        <div className="muted whitespace-nowrap text-right" title={m.modified ? new Date(m.modified * 1000).toLocaleString() : ""}>{fmtAge(m.modified)}</div>
-        <div className="min-w-0">{m.status}</div>
       </div>
 
       {hasParts && props.expanded && (
-        <div className="border-t divider">
-          <div className={`${GRID} relative bg-slate-100 py-1.5 text-xs dark:bg-slate-800/80`}>
+        <div className="fade border-t divider">
+          <div className="relative flex items-center justify-between gap-3 bg-slate-50 py-1.5 pr-4 text-xs dark:bg-slate-800/40" style={indent(depth + 1)}>
             <Guides depth={depth + 1} />
-            <div className="muted flex items-center justify-between gap-3" style={indent(depth + 1)}>
-              <span style={{ paddingLeft: CHEV + GAP }}>{props.partsLocked ? "The whole folder is selected, so all parts will be removed." : "Tick only the parts you want to remove."}</span>
-              {!props.partsLocked && (
-                <span className="flex shrink-0 gap-3">
-                  <button className="font-medium text-emerald-700 hover:underline dark:text-emerald-400" onClick={() => props.onSelectAllParts(true)}>Select all</button>
-                  <button className="font-medium text-emerald-700 hover:underline dark:text-emerald-400" onClick={() => props.onSelectAllParts(false)}>Clear</button>
-                </span>
-              )}
-            </div>
+            <span className="muted" style={{ paddingLeft: CHEV + GAP }}>{props.partsLocked ? "The whole folder is selected, so all parts will be removed." : m.viewOnly ? "Parts of this location (view only)." : m.lockedReason ? "This location can only be cleaned one part at a time." : "Select individual parts"}</span>
+            {!props.partsLocked && !m.viewOnly && !m.protected && (
+              <span className="flex shrink-0 gap-3">
+                <button className="font-medium text-indigo-600 hover:underline dark:text-indigo-300" onClick={() => props.onSelectAllParts(true)}>Select all</button>
+                <button className="font-medium text-indigo-600 hover:underline dark:text-indigo-300" onClick={() => props.onSelectAllParts(false)}>Clear</button>
+              </span>
+            )}
           </div>
           {m.parts.map((p) => {
             const checked = props.partsLocked || props.selectedParts.has(p.path);
             return (
-              <div key={p.path} className={`${GRID} relative border-t py-2 divider hover:bg-slate-100 dark:hover:bg-slate-800/60 ${checked ? "bg-emerald-50/70 dark:bg-emerald-950/30" : "bg-slate-50 dark:bg-slate-950/50"}`}>
+              <div key={p.path} className={`relative flex items-center gap-3 border-t py-2 pr-4 divider hover:bg-slate-50 dark:hover:bg-slate-800/50 ${checked ? "bg-indigo-50/60 dark:bg-indigo-500/10" : ""}`} style={indent(depth + 1)}>
                 <Guides depth={depth + 1} />
-                <div className="relative flex min-w-0 items-center" style={{ ...indent(depth + 1), gap: GAP }}>
+                <div className="relative flex min-w-0 flex-1 items-center" style={{ gap: GAP }}>
                   <span className="shrink-0" style={{ width: CHEV }} />
                   <Checkbox checked={checked} disabled={props.partsLocked || m.protected || m.viewOnly} onChange={() => props.onTogglePart(p)} label={`Select ${p.name}`} />
-                  <Icon name="folder" className="h-4 w-4 shrink-0 text-slate-400 dark:text-slate-400" />
                   <span className="truncate font-mono text-[13px]" title={p.path}>{p.name}</span>
+                  {p.warning && <WarnBadge warnings={[p.warning]} />}
+                  <span className="faint shrink-0 text-xs">{p.file_count.toLocaleString()} files · {fmtAge(p.last_modified)}</span>
                 </div>
-                <span />
-                <div>
+                <div className="w-28 shrink-0">
                   <div className="text-right tabular-nums">{fmtBytes(p.disk_bytes)}</div>
                   <SizeBar fraction={m.bytes ? p.disk_bytes / m.bytes : 0} tone="slate" />
                 </div>
-                <div className="muted text-right text-xs tabular-nums">{p.file_count.toLocaleString()}</div>
-                <div className="muted whitespace-nowrap text-right text-xs">{fmtAge(p.last_modified)}</div>
-                <div>{p.warning && <WarnBadge warnings={[p.warning]} />}</div>
               </div>
             );
           })}
@@ -164,22 +151,33 @@ export function TreeRow(props: {
   );
 }
 
-/** A collapsible group header row (project or category). Always the top level of the tree. */
-export function GroupHeader(props: { icon: "folder" | "box"; title: string; sub?: string; count: number; bytes: number; open: boolean; onToggleOpen: () => void; checked?: boolean; partial?: boolean; onToggle?: () => void; countLabel: string }) {
+/** A collapsible group header (a project or a category). Always the top level of the tree. */
+export function GroupHeader(props: { icon: "folder" | "box"; title: string; path?: string; detail?: string; bytes: number; open: boolean; onToggleOpen: () => void; checked?: boolean; partial?: boolean; onToggle?: () => void }) {
   return (
-    <div className={`${GRID} cursor-pointer border-b-2 bg-slate-200/80 py-2.5 divider hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700/70`} onClick={props.onToggleOpen}>
-      <div className="flex min-w-0 items-center" style={{ paddingLeft: PAD, gap: GAP }}>
-        <span className="flex shrink-0 justify-center text-slate-600 dark:text-slate-300" style={{ width: CHEV }}>
-          <Icon name={props.open ? "chevron-down" : "chevron-right"} className="h-4 w-4" />
-        </span>
+    <div
+      role="button"
+      tabIndex={0}
+      aria-expanded={props.open}
+      onClick={props.onToggleOpen}
+      onKeyDown={(e) => { if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); props.onToggleOpen(); } }}
+      className="flex cursor-pointer items-center gap-3 border-b bg-slate-100 py-2.5 pr-4 outline-none divider hover:bg-slate-200/60 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 dark:bg-slate-800/70 dark:hover:bg-slate-800"
+      style={{ paddingLeft: PAD }}
+    >
+      <div className="flex min-w-0 flex-1 items-center" style={{ gap: GAP }}>
+        <span className="flex shrink-0 justify-center text-slate-500" style={{ width: CHEV }}><Icon name={props.open ? "chevron-down" : "chevron-right"} className="h-4 w-4" /></span>
         {props.onToggle ? <Checkbox checked={!!props.checked} indeterminate={props.partial} onChange={props.onToggle} label={`Select all in ${props.title}`} /> : <span style={{ width: BOX }} />}
-        <Icon name={props.icon} className="h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
-        <span className="truncate font-semibold">{props.title}</span>
-        {props.sub && <span className="muted truncate text-xs" title={props.sub}>{props.sub}</span>}
+        <Icon name={props.icon} className="h-[18px] w-[18px] shrink-0 text-indigo-600 dark:text-indigo-300" />
+        <div className="min-w-0">
+          <div className="truncate font-semibold">{props.title}</div>
+          {(props.path || props.detail) && (
+            <div className="muted truncate text-xs">
+              {props.path && <span className="font-mono" title={props.path}>{props.path}</span>}
+              {props.path && props.detail ? " · " : ""}{props.detail}
+            </div>
+          )}
+        </div>
       </div>
-      <span className="muted text-xs">{props.count} {props.countLabel}</span>
-      <span className="text-right font-semibold tabular-nums">{fmtBytes(props.bytes)}</span>
-      <span /><span /><span />
+      <span className="w-28 shrink-0 text-right font-semibold tabular-nums">{fmtBytes(props.bytes)}</span>
     </div>
   );
 }
@@ -188,8 +186,28 @@ export function GroupHeader(props: { icon: "folder" | "box"; title: string; sub?
 export function ExpandToggle(props: { allOpen: boolean; onChange: (open: boolean) => void }) {
   const label = props.allOpen ? "Collapse all" : "Expand all";
   return (
-    <button className="btn btn-sm" onClick={() => props.onChange(!props.allOpen)} title={props.allOpen ? "Close every group and part" : "Open every group and show all parts"}>
-      <Icon name={props.allOpen ? "chevrons-up" : "chevrons-down"} className="h-3.5 w-3.5" />{label}
+    <button className="btn" onClick={() => props.onChange(!props.allOpen)} title={props.allOpen ? "Close every group and part" : "Open every group and show all parts"}>
+      <Icon name={props.allOpen ? "chevrons-up" : "chevrons-down"} className="h-4 w-4" />{label}
     </button>
+  );
+}
+
+/** Column titles for the Flat view; widths match the row cells. */
+export function FlatHeader(props: { sortKey: string; desc: boolean; onSort: (k: string) => void; allChecked: boolean; someChecked: boolean; onToggleAll: () => void }) {
+  const col = (label: string, key: string, cls: string) => (
+    <button className={`flex items-center gap-1 ${cls} hover:text-slate-900 dark:hover:text-white`} onClick={() => props.onSort(key)}>
+      {label}{props.sortKey === key && <Icon name="chevron-down" className={`h-3 w-3 ${props.desc ? "" : "rotate-180"}`} />}
+    </button>
+  );
+  return (
+    <div className="sticky top-0 z-10 flex items-center gap-3 border-b bg-slate-100 py-2 pr-4 text-[11px] font-semibold uppercase tracking-wide text-slate-500 divider dark:bg-slate-800" style={{ paddingLeft: PAD + CHEV + GAP }}>
+      <div className="flex min-w-0 flex-1 items-center" style={{ gap: GAP }}>
+        <Checkbox checked={props.allChecked} indeterminate={props.someChecked} onChange={props.onToggleAll} label="Select all" />
+        {col("Folder", "name", "")}
+      </div>
+      <div className="hidden w-28 shrink-0 min-[1000px]:block">Type</div>
+      <div className="hidden w-36 shrink-0 min-[1100px]:block">{col("Project", "project", "")}</div>
+      <div className="flex w-28 shrink-0 justify-end">{col("Size", "size", "")}</div>
+    </div>
   );
 }

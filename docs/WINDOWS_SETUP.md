@@ -50,7 +50,7 @@ The first run compiles all Rust dependencies, which takes 5 to 15 minutes. Later
 1. Open **Settings**, and under **Scan folders** remove the default home folder and add the folders where your projects live (for example `C:\Users\you\projects`), using **Browse...**.
 2. Optionally add **Protected paths** for projects you work on every day.
 3. Turn on **Dry run** for the first cleanup so nothing is deleted.
-4. Go to **Projects** and press **Scan**. Click a row for details, tick the rows you want, and press **Clean selected**.
+4. Go to **Projects** and press **Scan projects**. Click a row for details, tick the rows you want, and press **Reclaim**.
 5. When you are happy with the results, turn Dry run off. Delete mode defaults to the Recycle Bin, so you can restore anything.
 
 ## 9. Build an installer (optional)

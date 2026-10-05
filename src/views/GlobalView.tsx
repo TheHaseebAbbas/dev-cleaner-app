@@ -3,29 +3,24 @@ import { api, fmtBytes, fmtDuration, type DeleteOutcome, type GlobalCache, type 
 import { ConfirmDialog, LocationsDialog, ResultDialog, type PlanEntry } from "../components/dialogs";
 import { ScanPanel } from "../components/ScanPanel";
 import { SelectionBar } from "../components/SelectionBar";
-import { ExpandToggle, GroupHeader, ListHeader, TreeRow, type RowModel } from "../components/Tree";
+import { ExpandToggle, GroupHeader, TreeRow, type RowModel } from "../components/Tree";
+import { useCmd } from "../hooks/commands";
 import { useElapsed, type useGlobalScan } from "../hooks/useScans";
 import { Icon } from "../ui/Icon";
-import { Badge, Banner, EmptyState, SkeletonRows, StatCard } from "../ui/primitives";
+import { Badge, Banner, EmptyState, MetricStrip, PageHeader, SkeletonRows } from "../ui/primitives";
 import { WarnBadge } from "../ui/warnings";
 
-const COLUMNS = [
-  { label: "Cache" }, { label: "Category" }, { label: "Size", align: "right" as const }, { label: "Files", align: "right" as const },
-  { label: "Changed", align: "right" as const }, { label: "Notes" },
-];
+const VIEW_ONLY_NOTE = "Dev Cleaner can show this location but does not delete it.";
 
 function toModel(c: GlobalCache): RowModel {
   return {
-    key: c.id, name: c.name, sub: c.path, typeLabel: c.category, bytes: c.disk_bytes, files: c.file_count,
-    modified: Math.max(0, ...c.parts.map((p) => p.last_modified)), parts: c.parts, viewOnly: c.info_only,
-    lockedReason: c.info_only ? "View only. Dev Cleaner never deletes this." : c.parts_only ? "Choose individual parts instead" : undefined,
-    status: (
-      <div className="flex flex-wrap items-center gap-1">
-        {c.info_only && <Badge icon="eye">View only</Badge>}
-        {c.parts_only && !c.info_only && <Badge tone="amber">Pick parts</Badge>}
+    key: c.id, name: c.name, desc: c.note || c.path, meta: c.path, bytes: c.disk_bytes, parts: c.parts, viewOnly: c.info_only,
+    lockedReason: c.info_only ? VIEW_ONLY_NOTE : c.parts_only ? "Choose individual parts" : undefined,
+    badges: (
+      <>
+        {c.info_only && <Badge icon="eye" title={VIEW_ONLY_NOTE}>View only</Badge>}
         <WarnBadge warnings={c.warnings} />
-        {(c.info_only || !c.warnings.length) && c.note && <span className="muted line-clamp-2 text-xs" title={c.note}>{c.note}</span>}
-      </div>
+      </>
     ),
   };
 }
@@ -83,8 +78,15 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
   }
   const clean = () => (settings.confirm_before_delete || plan.some((e) => e.warnings.some((w) => w.level === "danger")) ? setConfirming(true) : run());
 
+  useCmd((cmd) => {
+    if (cmd === "scan") { status === "scanning" ? scan.stop() : scan.start(); }
+    else if (cmd === "select-all") setSel((s) => (s.size ? new Set() : new Set(removable.filter((c) => !c.parts_only).map((c) => c.id))));
+    else if (cmd === "delete") { if (plan.length && status !== "scanning" && !busy) clean(); }
+    else if (cmd === "escape") { if (sel.size) setSel(new Set()); else return false; }
+    else return false;
+  });
+
   const row = (c: GlobalCache) => {
-    // Rows always sit under a category header.
     const partsSel = c.parts.filter((p) => sel.has(p.path)).length;
     return (
       <TreeRow key={c.id} model={toModel(c)} maxBytes={maxBytes} checked={sel.has(c.id)} partial={!sel.has(c.id) && partsSel > 0}
@@ -96,6 +98,7 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
     );
   };
 
+  const header = (actions?: React.ReactNode) => <PageHeader title="Tools & SDKs" subtitle="Caches, SDKs, simulators and developer data outside your projects." actions={actions} />;
   const dialogs = (
     <>
       {confirming && <ConfirmDialog entries={plan} settings={settings} busy={busy} onConfirm={run} onCancel={() => setConfirming(false)} what="Tools will download or rebuild what they need the next time you use them." />}
@@ -107,9 +110,12 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
   if (status === "idle") {
     return (
       <div className="h-full overflow-auto">
-        <EmptyState icon="database" title="Tool caches and SDKs"
-          description="Package caches, SDK downloads, simulators and editor caches your tools keep in your user folder (like AppData), outside any project. Scan to see what is there and how big it is."
-          actions={<><button className="btn btn-primary" onClick={scan.start}><Icon name="search" />Scan caches</button><button className="btn" onClick={() => setShowWhere(true)}><Icon name="eye" />Where it looks</button></>} />
+        {header()}
+        <div className="card">
+          <EmptyState icon="database" title="Ready to scan tools & SDKs"
+            description="Package caches, SDK downloads, simulators and editor caches your tools keep in your user folder, outside any project."
+            actions={<><button className="btn btn-primary" onClick={scan.start}><Icon name="search" className="h-[18px] w-[18px]" />Scan tools & SDKs</button><button className="btn btn-ghost" onClick={() => setShowWhere(true)}>Where it looks</button></>} />
+        </div>
         {dialogs}
       </div>
     );
@@ -117,58 +123,58 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
 
   const p = scan.progress;
   const scanning = status === "scanning";
+  const scanBtn = scanning
+    ? <button className="btn" onClick={scan.stop}><Icon name="stop" className="h-3 w-3" />Stop</button>
+    : <button className="btn" onClick={scan.start}><Icon name="refresh" className="h-4 w-4" />Rescan</button>;
   const panel = scanning && (
-    <ScanPanel title="Measuring tool caches" phase={p ? `Checked ${p.done} of ${p.total} known locations` : "Looking for known locations"}
-      fraction={p && p.total ? p.done / p.total : null} current={p?.current} stats={[{ label: "Found", value: caches.length }]} elapsedMs={elapsed} onStop={scan.stop} />
+    <div className="mb-4"><ScanPanel title="Scanning tools & SDKs" phase={p ? `Checked ${p.done} of ${p.total} known locations` : "Looking for known locations"}
+      fraction={p && p.total ? p.done / p.total : null} current={p?.current} stats={[{ label: "Found", value: caches.length }]} elapsedMs={elapsed} onStop={scan.stop} /></div>
   );
 
-  if (scanning && !caches.length) return <div className="h-full overflow-auto"><div className="space-y-3">{panel}<div className="card overflow-hidden"><SkeletonRows rows={5} /></div></div>{dialogs}</div>;
-  if (status === "error") return <div className="h-full overflow-auto"><Banner tone="red" icon="x-circle" title="The scan could not finish" actions={<button className="btn btn-sm" onClick={scan.start}>Retry</button>}>{scan.error}</Banner>{dialogs}</div>;
+  if (scanning && !caches.length) return <div className="h-full overflow-auto">{header(scanBtn)}{panel}<div className="card overflow-hidden"><SkeletonRows rows={5} /></div>{dialogs}</div>;
+  if (status === "error") return <div className="h-full overflow-auto">{header()}<Banner tone="red" icon="x-circle" title="The scan could not finish" actions={<button className="btn btn-sm" onClick={scan.start}>Try again</button>}>{scan.error}</Banner>{dialogs}</div>;
   if (!scanning && !caches.length) {
     return (
       <div className="h-full overflow-auto">
-        <EmptyState tone="success" icon="check-circle" title="No tool caches found"
-          description={`Checked the known locations in ${fmtDuration(scan.summary?.elapsed_ms ?? 0)}. None of them exist on this computer.`}
-          actions={<><button className="btn btn-primary" onClick={scan.start}><Icon name="refresh" />Scan again</button><button className="btn" onClick={() => setShowWhere(true)}>Where it looks</button></>} />
+        {header()}
+        <div className="card">
+          <EmptyState tone="success" icon="check-circle" title="No tools or SDKs found"
+            description={`Checked the known locations in ${fmtDuration(scan.summary?.elapsed_ms ?? 0)}. None of them exist on this computer.`}
+            actions={<><button className="btn btn-primary" onClick={scan.start}><Icon name="refresh" className="h-4 w-4" />Scan again</button><button className="btn" onClick={() => setShowWhere(true)}>Where it looks</button></>} />
+        </div>
         {dialogs}
       </div>
     );
   }
 
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div className="grid grid-cols-4 gap-3">
-        <StatCard label="Can be cleaned" value={fmtBytes(total)} tone="green" hint={scanning ? "still measuring…" : undefined} />
-        <StatCard label="Caches found" value={removable.length} hint={viewOnly.length ? `+ ${viewOnly.length} view only` : undefined} />
-        <StatCard label="Selected" value={fmtBytes(bytes)} hint={`${plan.length} item${plan.length === 1 ? "" : "s"}`} />
-        <div className="card flex items-center justify-center gap-2 px-3">
-          {!scanning && <button className="btn" onClick={scan.start}><Icon name="refresh" />Rescan</button>}
-          <button className="btn btn-ghost" onClick={() => setShowWhere(true)} title="Where it looks"><Icon name="eye" /></button>
-        </div>
-      </div>
+    <div className="flex h-full flex-col">
+      {header(<>{scanBtn}<button className="btn btn-ghost" onClick={() => setShowWhere(true)} aria-label="Where it looks" title="Where it looks"><Icon name="eye" className="h-[18px] w-[18px]" /></button></>)}
+      <MetricStrip note={scanning ? "Still scanning…" : status === "stopped" ? "Scan stopped" : `Scan complete · ${fmtDuration(scan.summary?.elapsed_ms ?? 0)}`}
+        items={[{ label: "Reclaimable", value: fmtBytes(total), hero: true }, { label: "Locations", value: sorted.length, hint: viewOnly.length ? `${viewOnly.length} view only` : undefined }, { label: "Selected", value: fmtBytes(bytes) }]} />
       {panel}
-      {status === "stopped" && <Banner tone="amber" icon="stop" title="Scan stopped" actions={<button className="btn btn-sm" onClick={scan.start}>Scan again</button>}>Results so far are shown. Sizes may be incomplete.</Banner>}
-      <Banner tone="blue" icon="info" title="Remove a whole cache or just one part" actions={<ExpandToggle allOpen={allOpen} onChange={setAllOpen} />}>Tick a cache, or open its arrow to pick single Gradle versions, SDK platforms or simulators. Rows marked "May be required" explain what breaks.</Banner>
+      {status === "stopped" && <div className="mb-3"><Banner tone="amber" icon="stop" title="Scan stopped" actions={<button className="btn btn-sm" onClick={scan.start}>Scan again</button>}>Results so far are shown. Sizes may be incomplete.</Banner></div>}
+      <div className="mb-3 flex items-center justify-between gap-3">
+        <p className="muted text-[13px]">Open a location to choose individual parts, such as single Gradle versions, SDK platforms or simulators.</p>
+        <ExpandToggle allOpen={allOpen} onChange={setAllOpen} />
+      </div>
 
       <div className="card min-h-0 flex-1 overflow-auto">
-        <div className="min-w-[860px]">
-          <ListHeader columns={COLUMNS} />
-          {categories.map((g) => (
-            <div key={g.name}>
-              <GroupHeader icon="box" title={g.name} count={g.list.length} countLabel={g.list.length === 1 ? "cache" : "caches"} bytes={g.bytes} open={!collapsed.has(g.name)} onToggleOpen={() => setCollapsed((s) => flip(s, g.name))} />
-              {!collapsed.has(g.name) && g.list.map(row)}
-            </div>
-          ))}
-          {viewOnly.length > 0 && (
-            <div>
-              <GroupHeader icon="box" title="Disk images" sub="View only, never deleted" count={viewOnly.length} countLabel={viewOnly.length === 1 ? "item" : "items"} bytes={viewOnly.reduce((s, c) => s + c.disk_bytes, 0)} open={!collapsed.has("__view")} onToggleOpen={() => setCollapsed((s) => flip(s, "__view"))} />
-              {!collapsed.has("__view") && viewOnly.map(row)}
-            </div>
-          )}
-        </div>
+        {categories.map((g) => (
+          <div key={g.name}>
+            <GroupHeader icon="box" title={g.name} detail={`${g.list.length} location${g.list.length === 1 ? "" : "s"}`} bytes={g.bytes} open={!collapsed.has(g.name)} onToggleOpen={() => setCollapsed((s) => flip(s, g.name))} />
+            {!collapsed.has(g.name) && g.list.map(row)}
+          </div>
+        ))}
+        {viewOnly.length > 0 && (
+          <div>
+            <GroupHeader icon="box" title="View only" detail="Shown for information. Never deleted." bytes={viewOnly.reduce((s, c) => s + c.disk_bytes, 0)} open={!collapsed.has("__view")} onToggleOpen={() => setCollapsed((s) => flip(s, "__view"))} />
+            {!collapsed.has("__view") && viewOnly.map(row)}
+          </div>
+        )}
       </div>
 
-      <SelectionBar count={plan.length} bytes={bytes} noun="item" modeLabel={settings.delete_mode === "trash" ? "Moves to Trash, recoverable" : "Deleted permanently"}
+      <SelectionBar count={plan.length} bytes={bytes} noun="item" permanent={settings.delete_mode === "permanent"}
         dryRun={settings.dry_run} busy={busy} onClear={() => setSel(new Set())} onClean={clean} blockedReason={scanning ? "Wait for the scan to finish" : undefined} />
       {dialogs}
     </div>

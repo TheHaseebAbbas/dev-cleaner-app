@@ -10,8 +10,14 @@ export function ConfirmDialog(props: { entries: PlanEntry[]; settings: Settings;
   const [ack, setAck] = useState(false);
   const bytes = props.entries.reduce((s, e) => s + e.bytes, 0);
   const dry = props.settings.dry_run;
-  const mode = dry ? "Nothing will be deleted (dry run)." : props.settings.delete_mode === "trash" ? "They move to the Trash, so you can put them back from the Trash tab." : "They are deleted permanently and cannot be restored.";
+  const permanent = props.settings.delete_mode === "permanent";
   const blocked = needsAck(props.entries) && !ack && !dry;
+  const flagged = needsAck(props.entries);
+  const explain = dry
+    ? <>Nothing will be deleted.<br />This will only show what would be removed.</>
+    : permanent
+      ? <>These folders will be deleted permanently<br />and cannot be restored.</>
+      : <>These folders will be moved to the Trash.<br />You can restore them later.</>;
   return (
     <Modal
       title={dry ? "Simulate removing these folders?" : "Remove these folders?"}
@@ -20,21 +26,22 @@ export function ConfirmDialog(props: { entries: PlanEntry[]; settings: Settings;
       onClose={props.onCancel}
       footer={<>
         <button className="btn" onClick={props.onCancel} disabled={props.busy}>Cancel</button>
-        <button className="btn btn-danger" disabled={blocked || props.busy} onClick={props.onConfirm}>
-          {props.busy && <Spinner />}{dry ? "Simulate" : props.settings.delete_mode === "trash" ? "Move to Trash" : "Delete permanently"}
+        <button className={`btn ${permanent && !dry ? "btn-danger" : "btn-primary"}`} disabled={blocked || props.busy} onClick={props.onConfirm}>
+          {props.busy && <Spinner />}{flagged && !dry ? "Continue" : dry ? "Simulate" : permanent ? "Delete permanently" : "Move to Trash"}
         </button>
       </>}
     >
-      <p>{mode} {props.what ?? "Your source code and other project files are not touched."}</p>
-      <div className="mt-3 max-h-56 overflow-auto rounded-lg border divider">
+      <p className="text-[13px]">{explain}</p>
+      <div className="mt-3 max-h-56 overflow-auto rounded-[10px] border divider">
         {props.entries.map((e) => (
           <div key={e.path} className="flex items-center justify-between gap-3 border-b px-3 py-1.5 text-xs last:border-0 divider">
-            <span className="break-all font-mono">{e.label}</span>
+            <span className="mono break-all">{e.label}</span>
             <span className="shrink-0 font-medium tabular-nums">{fmtBytes(e.bytes)}</span>
           </div>
         ))}
       </div>
       <WarningPanel entries={props.entries} ack={ack} onAck={setAck} dryRun={dry} />
+      {!flagged && <p className="mt-3 flex items-center gap-2 text-[13px]"><Icon name="check-circle" className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />{props.what ?? "Source code is not touched"}</p>}
     </Modal>
   );
 }
@@ -45,17 +52,17 @@ export function ResultDialog({ result, onClose }: { result: DeleteOutcome[]; onC
   const freed = ok.reduce((s, r) => s + r.bytes_freed, 0);
   const dry = result[0]?.dry_run;
   return (
-    <Modal title={dry ? "Simulation finished" : bad.length ? "Finished with some problems" : "Done"} onClose={onClose} footer={<button className="btn btn-primary" onClick={onClose}>OK</button>}>
+    <Modal title={dry ? "Simulation finished" : bad.length ? "Finished with some problems" : "Done"} onClose={onClose} footer={<button className="btn btn-primary" onClick={onClose}>Done</button>}>
       <div className="flex items-center gap-4">
-        <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${bad.length && !ok.length ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40"}`}><Icon name={bad.length && !ok.length ? "x-circle" : "check-circle"} className="h-6 w-6" /></div>
+        <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${bad.length && !ok.length ? "bg-red-100 text-red-600" : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400"}`}><Icon name={bad.length && !ok.length ? "x-circle" : "check-circle"} className="h-6 w-6" /></div>
         <div>
           <div className="text-2xl font-semibold tabular-nums">{fmtBytes(freed)}</div>
-          <div className="muted text-sm">{dry ? "would be freed" : "freed"} · {ok.length} of {result.length} folders</div>
+          <div className="text-sm font-medium">{dry ? "would be reclaimed" : "reclaimed"}</div><div className="muted text-[13px]">{ok.length} of {result.length} folders {dry ? "would be removed" : "removed successfully"}.</div>
         </div>
       </div>
       {bad.length > 0 && (
         <div className="mt-4">
-          <div className="mb-1 text-sm font-semibold">Could not remove ({bad.length})</div>
+          <div className="mb-1 text-sm font-semibold">{bad.length} folder{bad.length === 1 ? "" : "s"} could not be removed</div>
           <ul className="max-h-48 space-y-1.5 overflow-auto text-xs">
             {bad.map((r) => (
               <li key={r.path} className="rounded-lg border border-red-200 bg-red-50 p-2 dark:border-red-900 dark:bg-red-950/30">
@@ -75,7 +82,7 @@ export function HelpDialog(props: { settings: Settings; rules: Rule[]; onOpenSet
   const active = props.rules.filter((r) => r.enabled);
   const step = (n: number, title: string, body: React.ReactNode) => (
     <div className="flex gap-3">
-      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700 dark:bg-emerald-900/50 dark:text-emerald-300">{n}</div>
+      <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-indigo-100 text-xs font-bold text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">{n}</div>
       <div className="min-w-0"><div className="font-semibold">{title}</div><div className="muted mt-0.5">{body}</div></div>
     </div>
   );
@@ -128,7 +135,7 @@ export function LocationsDialog(props: { items?: Item[]; onClose: () => void; on
                 const found = (props.items ?? []).filter((i) => norm(i.path).startsWith(norm(r.path) + "/"));
                 return (
                   <div key={r.path} className="flex items-center gap-3 border-b px-3 py-2 text-xs last:border-0 divider">
-                    <Icon name="folder" className="h-4 w-4 text-emerald-600" />
+                    <Icon name="folder" className="h-4 w-4 text-indigo-600" />
                     <span className="min-w-0 flex-1 break-all font-mono">{r.path}</span>
                     <Badge tone={r.exists ? "green" : "red"}>{r.exists ? "found" : "missing"}</Badge>
                     {props.items && <span className="muted w-40 text-right">{found.length ? `${found.length} folders · ${fmtBytes(found.reduce((s, i) => s + i.disk_bytes, 0))}` : "nothing found"}</span>}
@@ -162,6 +169,49 @@ export function LocationsDialog(props: { items?: Item[]; onClose: () => void; on
           </section>
         </div>
       )}
+    </Modal>
+  );
+}
+
+const REPO_URL = "https://github.com/TheHaseebAbbas/dev-cleaner-app";
+
+export function AboutDialog({ onClose }: { onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () => { navigator.clipboard?.writeText(REPO_URL).then(() => setCopied(true), () => {}); };
+  const point = (title: string, body: string) => (
+    <li className="flex gap-2.5 text-[13px]">
+      <Icon name="check-circle" className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+      <span><span className="font-medium">{title}</span> <span className="muted">{body}</span></span>
+    </li>
+  );
+  return (
+    <Modal title="About Dev Cleaner" width="max-w-lg" onClose={onClose} footer={<button className="btn btn-primary" onClick={onClose}>Close</button>}>
+      <div className="flex items-center gap-4">
+        <img src="/icon.svg" alt="" className="h-16 w-16" />
+        <div>
+          <div className="text-xl font-semibold tracking-tight">Dev Cleaner</div>
+          <div className="muted text-[13px]">Version {__APP_VERSION__}</div>
+          <div className="muted text-[13px]">Windows, macOS and Linux</div>
+        </div>
+      </div>
+      <p className="mt-4 text-[13px]">
+        Finds and removes the files developer tools leave behind, such as <code>node_modules</code>, build output, package caches, SDK downloads and simulators, so you can reclaim disk space without touching your source code.
+      </p>
+      <h3 className="mt-5 mb-2 text-sm font-semibold">Built to be safe</h3>
+      <ul className="space-y-2">
+        {point("Nothing is removed until you confirm.", "You see the exact folders first.")}
+        {point("Removed folders go to the Trash", "so you can restore them, unless you choose permanent deletion.")}
+        {point("Only rebuildable folders are offered.", "A folder must match a rule and sit beside its project file.")}
+        {point("Works offline.", "No account, no telemetry. Settings and history stay on this computer.")}
+      </ul>
+      <h3 className="mt-5 mb-2 text-sm font-semibold">Details</h3>
+      <dl className="grid grid-cols-[7rem_1fr] gap-y-1.5 text-[13px]">
+        <dt className="muted">Built with</dt><dd>Tauri 2, Rust, React and TypeScript</dd>
+        <dt className="muted">Your data</dt><dd>settings.json and history.jsonl in the app config folder</dd>
+        <dt className="muted">Shortcuts</dt><dd>Ctrl/Cmd+K opens the command palette</dd>
+        <dt className="muted">Source</dt>
+        <dd className="flex min-w-0 items-center gap-2"><span className="mono truncate text-xs">{REPO_URL}</span><button className="btn btn-sm shrink-0" onClick={copy}>{copied ? "Copied" : "Copy link"}</button></dd>
+      </dl>
     </Modal>
   );
 }

@@ -45,7 +45,7 @@ The first run compiles all Rust dependencies, which takes 5 to 15 minutes. Later
 1. Open **Settings**, and under **Scan folders** replace the default home folder with where your projects live (for example `~/Developer`), using **Browse...**.
 2. Optionally add **Protected paths** for projects you work on every day.
 3. Turn on **Dry run** for the first cleanup so nothing is deleted.
-4. Go to **Projects** and press **Scan**, select rows, then **Clean selected**.
+4. Go to **Projects** and press **Scan projects**, select rows, then **Reclaim**.
 5. When you are happy with the results, turn Dry run off. Delete mode defaults to the Trash, so you can restore anything.
 
 If macOS asks whether Dev Cleaner can access Documents, Desktop or Downloads, choose Allow; otherwise those folders are skipped. For folders it still cannot read, give your terminal (or the built app) Full Disk Access under System Settings, then Privacy & Security.

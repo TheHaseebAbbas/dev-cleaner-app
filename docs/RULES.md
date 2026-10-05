@@ -5,7 +5,7 @@
 Two kinds of things are cleaned:
 
 1. [Project rules](#project-rules): folders inside your projects (Projects tab).
-2. [Tool caches and SDKs](#tool-caches-and-sdks): folders in your user area (Tool caches tab).
+2. [Tools & SDKs](#tools--sdks): folders in your user area (Tools & SDKs page).
 
 Everything listed here can be recreated by the tool that made it, except where marked **not recoverable**. Parts marked ✂ can be removed one at a time.
 
@@ -44,7 +44,7 @@ A rule matches a folder name only when a marker file is present. Markers with `*
 
 **Protected from matching.** Nested matches are not listed twice: once a folder matches, the scanner does not look inside it. Folders under skipped names (Settings) are never entered.
 
-## Tool caches and SDKs
+## Tools & SDKs
 Paths depend on your operating system. Use **Where it looks** in the app to see the exact path on your machine, and whether it exists.
 
 ### Node.js

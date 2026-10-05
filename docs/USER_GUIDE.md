@@ -4,8 +4,8 @@
 
 ## Contents
 1. [How the app decides what to show](#how-the-app-decides-what-to-show)
-2. [The Projects tab](#the-projects-tab)
-3. [The Tool caches tab](#the-tool-caches-tab)
+2. [The Projects page](#the-projects-page)
+3. [The Tools & SDKs page](#the-tools--sdks-page)
    - [Where removed folders go, and getting them back](#where-removed-folders-go-and-getting-them-back)
 4. [Removing only part of a folder](#removing-only-part-of-a-folder)
 5. [Warnings](#warnings)
@@ -13,21 +13,37 @@
 7. [History](#history)
 8. [Where your data is stored](#where-your-data-is-stored)
 
+## Getting around
+
+The sidebar groups the app into **Clean** (Projects, Tools & SDKs), **Manage** (Trash, History) and **Configure** (Settings). The bottom of the sidebar shows free disk space, an amber **Dry run** note when nothing will be deleted, and **About**.
+
+| Shortcut | Action |
+| --- | --- |
+| Ctrl/Cmd+K | Command palette: scan, open a page, toggle dark mode or dry run, About |
+| Ctrl/Cmd+R | Scan (or stop) on Projects and Tools & SDKs |
+| Ctrl/Cmd+A | Select everything visible (press again to clear) |
+| Ctrl/Cmd+F | Search projects |
+| Ctrl/Cmd+, | Open Settings |
+| Esc | Close the panel, then clear the selection |
+| Delete | Reclaim the selection (asks first) |
+
+On first launch a single welcome screen asks for your project folders. Once something is selected, a bar at the bottom shows the size and the button **Reclaim X**. Folders are labelled **Check first** or **May be required** when they need care.
+
 ## How the app decides what to show
 Dev Cleaner works from **rules**. A rule says "a folder with this name counts only if this marker file is next to it". For example `node_modules` counts only beside a `package.json`, and Rust's `target` only beside a `Cargo.toml`. A plain folder that happens to be called `build` or `target` is left alone.
 
-- **Projects tab:** looks only inside the **scan folders** you set. Nothing outside them is read.
-- **Tool caches tab:** looks only at a fixed list of known locations for your operating system (for example `%LOCALAPPDATA%` on Windows). The **Where it looks** button shows every path and whether it exists.
+- **Projects page:** looks only inside the **scan folders** you set. Nothing outside them is read.
+- **Tools & SDKs page:** looks only at a fixed list of known locations for your operating system (for example `%LOCALAPPDATA%` on Windows). The **Where it looks** button shows every path and whether it exists.
 
 You can see both lists at any time with the eye button or **Where it looks**. The full rule list is in [Rules and locations](RULES.md).
 
-## The Projects tab
+## The Projects page
 
 ### States
 | State | What you see | What you can do |
 | --- | --- | --- |
 | No scan folders | A prompt to choose a folder | Open Settings and add one |
-| Ready | The folders that will be scanned and a **Scan now** button | Scan, see where it looks, read how it works |
+| Ready | The folders that will be scanned and a **Scan projects** button | Scan, see where it looks, read how it works |
 | Scanning | A progress card (what it is doing, folders checked, found so far, time) with rows appearing live | Stop the scan; keep browsing results |
 | Results | Totals, filters, the list, a details panel and a selection bar | Select, filter, sort, clean |
 | Stopped | The results found so far, with a notice that sizes may be incomplete | Scan again |
@@ -36,7 +52,7 @@ You can see both lists at any time with the eye button or **Where it looks**. Th
 | Error | A red notice with the message | Retry |
 | Removing | The selection bar shows a spinner | Wait; a result dialog follows |
 
-Switching to another tab does not cancel a scan. Come back and the results are still there.
+Switching to another page does not cancel a scan. Come back and the results are still there.
 
 ### Reading the list
 Columns: folder, type, **size on disk**, file count, when the project was last used, and notes (protected, warnings, tracked by git).
@@ -49,9 +65,9 @@ Columns: folder, type, **size on disk**, file count, when the project was last u
 - **By project** groups rows under their project. **Flat** is one sorted list. **Map** is a treemap where area is size.
 - Search by path or type, filter by type, minimum size (MB), minimum idle days, and "only git-ignored".
 - Click a column header to sort.
-- **Expand all / Collapse all** (next to the view switcher) opens or closes every project group and every folder's parts in one click. The button flips to show what the next click does. You can also open a single group or the arrow on a row. The same button is in the Tool caches tab.
+- **Expand all / Collapse all** (next to the view switcher) opens or closes every project group and every folder's parts in one click. The button flips to show what the next click does. You can also open a single group or the arrow on a row. The same button is in the Tools & SDKs page.
 
-## The Tool caches tab
+## The Tools & SDKs page
 Same states as Projects. Results are grouped by category (Node.js, Rust, Android SDK, IDEs, and so on) and sorted by size. Only caches that exist on your computer are shown.
 
 Items marked **View only**, such as Docker Desktop's disk image, are never deletable from the app. The note beside them explains the safe way to shrink them (for example `docker system prune`).
@@ -78,7 +94,7 @@ More in [Safety](SAFETY.md).
 
 ## Cleaning
 1. Tick rows or parts. The bar at the bottom shows how many and how much.
-2. Press **Clean selected**. If **Ask before removing** is on, or any selected item is red, a dialog lists the exact folders.
+2. Press **Reclaim**. If **Ask before removing** is on, or any selected item is red, a dialog lists the exact folders.
 3. Confirm. Folders go to the Trash (default) or are deleted permanently, depending on **Settings → Cleaning**.
 4. A result dialog shows how much was freed and lists any folder that could not be removed with the reason. The usual reason is a file in use by an editor or dev server.
 
@@ -89,13 +105,13 @@ In **Move to Trash** mode (the default) folders go to your operating system's Tr
 
 | System | Where | Open it |
 | --- | --- | --- |
-| Windows | Recycle Bin | Desktop icon, or the **Open** button in the Trash tab |
+| Windows | Recycle Bin | Desktop icon, or the **Open** button in the Trash page |
 | macOS | `~/.Trash` (the Trash in the Dock) | Dock, or **Open** |
 | Linux | `~/.local/share/Trash` (on other drives, a `.Trash-<id>` folder at the drive root) | File manager, or **Open** |
 
 In **Delete permanently** mode nothing goes to the Trash and it cannot be undone.
 
-### The Trash tab (Windows and Linux)
+### The Trash page (Windows and Linux)
 Lists the folders Dev Cleaner removed, newest first: size, when they were removed, where they will be restored to, and when they will be cleared automatically.
 
 - **Restore** (per row, or **Restore selected**) puts the folder back at its original path. If something already exists there, or the parent folder is gone, the result dialog explains and nothing is lost.
@@ -104,10 +120,10 @@ Lists the folders Dev Cleaner removed, newest first: size, when they were remove
 - After restoring, rescan so the folder appears in the list again.
 
 ### Automatic clearing
-**Settings → Trash → Clear automatically after** sets how many days items stay (Never, 7, 14, 30, 90, or any number; default 30). The app checks when it opens and every hour while it is running, and removes only items older than that. Items already restored are not affected. Set it to 0 / Never to keep everything until you delete it yourself. The Trash tab shows each item's remaining time. The app has to be running for cleanup to happen.
+**Settings → Trash → Clear automatically after** sets how many days items stay (Never, 7, 14, 30, 90, or any number; default 30). The app checks when it opens and every hour while it is running, and removes only items older than that. Items already restored are not affected. Set it to 0 / Never to keep everything until you delete it yourself. The Trash page shows each item's remaining time. The app has to be running for cleanup to happen.
 
 ### macOS
-macOS does not let apps list or restore the Trash, so the Trash tab only offers **Open Trash**. In Finder, right-click an item and choose **Put Back**. Auto-clear is not available; use Finder's "Remove items from the Trash after 30 days" setting (Finder → Settings → Advanced) instead.
+macOS does not let apps list or restore the Trash, so the Trash page only offers **Open Trash**. In Finder, right-click an item and choose **Put Back**. Auto-clear is not available; use Finder's "Remove items from the Trash after 30 days" setting (Finder → Settings → Advanced) instead.
 
 ## History
 Every removal is logged with time, path, how it was removed and bytes freed. The top shows the total reclaimed.

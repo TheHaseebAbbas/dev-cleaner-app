@@ -54,6 +54,6 @@ Red items need the **I understand** tick before the confirm button works. In dry
 | Blank window on Windows | Install the WebView2 runtime (see the [Windows guide](WINDOWS_SETUP.md)). |
 | `npm.ps1 cannot be loaded` in PowerShell | See the script policy fix in the [Windows guide](WINDOWS_SETUP.md). |
 | `EBUSY` errors in the terminal while running `npm run tauri dev` on Windows | The file watcher touched a locked system file. Harmless. |
-| Tool caches tab lists fewer items than expected | Only caches that exist on your machine are shown. Use **Where it looks**. |
+| Tools & SDKs page lists fewer items than expected | Only caches that exist on your machine are shown. Use **Where it looks**. |
 | Settings did not save | Settings save after a short pause. Wait a second before closing. Check the data folder is writable. |
 | Want to start over | Close the app and delete `settings.json` (see the [User guide](USER_GUIDE.md#where-your-data-is-stored)). |

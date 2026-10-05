@@ -4,29 +4,29 @@
 
 A desktop app that finds and removes the junk developer tools leave behind: `node_modules`, build output, package caches, SDK downloads, simulators and IDE caches. It runs on Windows, macOS and Linux.
 
-It is the interactive version of [jemishavasoya/dev-cleaner](https://github.com/jemishavasoya/dev-cleaner), built with Tauri 2 (Rust) and React.
-
 **Safe by default.** Nothing is deleted until you tick it and confirm. Removed folders go to the Trash, a dry-run mode lets you rehearse, and the app warns you before you touch anything a project may still need. See [Safety](docs/SAFETY.md).
 
 ## What you get
 
-| Tab | What it does |
+| Page | What it does |
 | --- | --- |
 | **Projects** | Scans your code folders and lists every rebuildable folder with size, file count, age, git status and warnings. Folders made of independent pieces expand into sub-items you can remove one by one. |
-| **Tool caches** | Measures caches and SDKs in your user folder (npm, Cargo, Gradle, Android SDK, Xcode, JetBrains, VS Code caches and more). Docker and WSL disks are shown view-only. |
+| **Tools & SDKs** | Measures caches and SDKs in your user folder (npm, Cargo, Gradle, Android SDK, Xcode, JetBrains, VS Code caches and more). Docker and WSL disks are shown view-only. |
 | **Trash** | Everything Dev Cleaner moved to the Trash, with **Restore** and **Delete forever**, and an auto-clear timer you can change. |
 | **History** | Every cleanup, with the total space reclaimed. |
-| **Settings** | Scan folders, protected paths, rules, delete mode, dry run, depth, filters and theme. |
+| **Settings** | An overview that opens into Appearance, Cleaning, Safety, Scanning, Protection, Rules and Trash. Also has **About**. |
 
-Both scanning tabs show clear states: ready to scan, scanning with live progress, results, nothing found, stopped, and error.
+Both scanning pages show clear states: ready to scan, scanning with live progress, results, nothing found, stopped, and error.
 
 ## Quick start for users
 
 1. Install the app, or run it from source (see the setup guide for your system below).
-2. Open **Settings** and add the folder that holds your projects, for example `C:\development` or `~/code`.
-3. Go to **Projects** and press **Scan now**.
+2. On first launch, choose the folder that holds your projects, for example `C:\development` or `~/code`. You can change it later in **Settings → Scanning**.
+3. Go to **Projects** and press **Scan projects**.
 4. Tick what you want gone. Use the arrow on a row to pick only some parts.
-5. Press **Clean selected** and confirm.
+5. Press **Reclaim** in the bar that appears, then confirm.
+
+Press **Ctrl/Cmd+K** for the command palette. Shortcuts: Ctrl/Cmd+R scan, Ctrl/Cmd+A select visible, Ctrl/Cmd+, settings, Esc clear, Delete reclaim.
 
 Tip: turn on **Dry run** in Settings for your first try. It reports what would be freed without touching anything.
 

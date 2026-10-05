@@ -76,6 +76,8 @@ app-icon.svg           Source for generated icons
 ```
 
 ## Architecture
+
+The UI follows `Dev_Cleaner_UI_UX_v2_Specification.md`: Inter and JetBrains Mono are bundled with `@fontsource-variable`, the brand colour is indigo (emerald only for success, red only for danger), and the shell is a 232px sidebar plus a page header per view. Shortcuts and the command palette live in `src/App.tsx` and `src/components/CommandPalette.tsx`; views receive commands through `src/hooks/commands.ts`. The app version shown in About comes from `package.json` (Vite `define` as `__APP_VERSION__`), so bump it there and in `src-tauri/tauri.conf.json` together.
 The Rust `core` knows nothing about the UI. `src-tauri` exposes it as commands and streams progress as events.
 
 ```

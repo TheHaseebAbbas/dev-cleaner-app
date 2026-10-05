@@ -17,7 +17,7 @@ export function ScanPanel(props: {
   return (
     <div className="card rise p-5">
       <div className="flex items-start gap-4">
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-600 dark:bg-emerald-900/40 dark:text-emerald-400"><Spinner className="h-5 w-5" /></div>
+        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400"><Spinner className="h-5 w-5" /></div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-3">
             <h2 className="text-base font-semibold">{props.title}</h2>

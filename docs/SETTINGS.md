@@ -14,6 +14,8 @@ Settings save automatically a moment after you change them. Open the **Settings*
 
 ## Every setting
 
+Settings opens as a list of sections (Appearance, Cleaning, Safety, Scanning, Protection, Rules, Trash) with a one-line summary of each. Click a section to edit it; changes save automatically. Safety is read-only and lists the protections that are always on. In Rules you can search, see each rule's details (folder names, marker files, how it comes back) and add your own with a name, folder names, optional marker files and a description. **About** shows the version and where your data lives.
+
 Sections appear in this order in the app.
 
 ### Appearance
@@ -69,40 +71,40 @@ Scan folder: the folder that holds your projects. Everything below is optional t
 ### Flutter / Dart
 - **Rules to keep on:** `Flutter build`, `.dart_tool`, and `.fvm` if you use FVM.
 - **Use parts:** open the `build` row and remove only `android` or `ios` output when you need space on one platform.
-- **Tool caches:** Dart pub cache (`flutter pub get` restores it), FVM Flutter SDKs (one per version part; keep the versions your projects pin), Gradle caches, Android SDK parts, and on macOS Xcode DerivedData and CocoaPods.
+- **Tools & SDKs:** Dart pub cache (`flutter pub get` restores it), FVM Flutter SDKs (one per version part; keep the versions your projects pin), Gradle caches, Android SDK parts, and on macOS Xcode DerivedData and CocoaPods.
 - **Android SDK:** keep the `platforms` and `build-tools` your `android/app/build.gradle` uses (`compileSdk`). Remove older ones.
 - **Scan on Windows:** set the scan folder to something like `C:\development\flutter_projects`.
 - Restore with `flutter pub get`, then `flutter build`.
 
 ### Android (Kotlin / Java / Gradle)
-- **Rules:** `.gradle (project)` and `Gradle build output` (the `build` folder beside `build.gradle`, `build.gradle.kts` or `settings.gradle`). The big wins are in Tool caches: **Gradle caches** (per-part), **Gradle distributions** (one per version), **Android SDK** parts, **emulator system images**.
+- **Rules:** `.gradle (project)` and `Gradle build output` (the `build` folder beside `build.gradle`, `build.gradle.kts` or `settings.gradle`). The big wins are in Tools & SDKs: **Gradle caches** (per-part), **Gradle distributions** (one per version), **Android SDK** parts, **emulator system images**.
 - **Keep:** the SDK platform and build-tools matching `compileSdk`, the NDK version pinned in `build.gradle`, and the Gradle version in `gradle-wrapper.properties`.
 - **Danger:** deleting an emulator (AVD) deletes its apps and data permanently. The app asks for an extra confirmation.
 - The Android SDK location comes from `ANDROID_HOME` or `ANDROID_SDK_ROOT`, otherwise the OS default (`%LOCALAPPDATA%\Android\Sdk` on Windows).
 
 ### Rust
 - **Rules:** `Rust target`. Open it to remove only `debug` or `release`.
-- **Tool caches:** Cargo registry (index, crates, sources are separate parts), Rust toolchains (never remove your default one).
+- **Tools & SDKs:** Cargo registry (index, crates, sources are separate parts), Rust toolchains (never remove your default one).
 - **Tip:** `target` is often the biggest folder on a Rust developer's disk. Protect the crates you build all day, and clean the old ones.
 - Restore with `cargo build`.
 
 ### Python
 - **Rules:** `Python virtualenv`, `Python caches`.
 - **Before deleting a virtualenv:** make sure the project has `requirements.txt`, `pyproject.toml` or a `Pipfile`. If not, the app shows a red warning because you could not recreate the environment.
-- **Tool caches:** pip cache, Conda package cache.
+- **Tools & SDKs:** pip cache, Conda package cache.
 - Restore with `python -m venv .venv && pip install -r requirements.txt`.
 
 ### .NET / C#
 - **Rules:** `bin / obj` (only beside a `.csproj`/`.sln`-style project file) and `.vs`.
-- **Tool caches:** NuGet packages (one part per package) and NuGet HTTP cache on Windows.
+- **Tools & SDKs:** NuGet packages (one part per package) and NuGet HTTP cache on Windows.
 - Restore with `dotnet restore`.
 
 ### Java / Maven
-- **Rules:** `Maven target`. **Tool caches:** Maven repository (`~/.m2`). Offline builds fail until dependencies are downloaded again.
+- **Rules:** `Maven target`. **Tools & SDKs:** Maven repository (`~/.m2`). Offline builds fail until dependencies are downloaded again.
 
 ### iOS / macOS (Swift, Xcode, CocoaPods)
 - **Rules:** `CocoaPods Pods`, `SwiftPM .build`.
-- **Tool caches:** Xcode DerivedData (safe, rebuilt automatically), iOS DeviceSupport (re-copied when a device connects), CoreSimulator devices (each simulator is a part and its data is lost), CocoaPods cache, Homebrew cache.
+- **Tools & SDKs:** Xcode DerivedData (safe, rebuilt automatically), iOS DeviceSupport (re-copied when a device connects), CoreSimulator devices (each simulator is a part and its data is lost), CocoaPods cache, Homebrew cache.
 - **Danger:** **Xcode Archives** are your shipped builds and their debug symbols. They cannot be recreated. Review each date.
 
 ### Unity
@@ -124,7 +126,7 @@ Scan folder: the folder that holds your projects. Everything below is optional t
 | Situation | Suggested settings |
 | --- | --- |
 | **First time trying it** | Dry run on, Move to Trash, ask before removing on, one scan folder. |
-| **Laptop with a small SSD** | Scan on launch off. Minimum size 100 MB. Permanent delete only after you have done a trash-mode run and are happy. Start with the Tool caches tab, which often frees the most with the least risk. |
+| **Laptop with a small SSD** | Scan on launch off. Minimum size 100 MB. Permanent delete only after you have done a trash-mode run and are happy. Start with the Tools & SDKs page, which often frees the most with the least risk. |
 | **Big workstation with hundreds of projects** | Minimum idle 30 days, depth 6, protect your active repos, skip `archive`/`backup` folders. |
 | **Monorepo** | Depth 10, minimum size 20 MB, protect the root. |
 | **Shared or work computer** | Keep confirm on, Trash on, add company repos under Protected paths. |
@@ -133,18 +135,18 @@ Scan folder: the folder that holds your projects. Everything below is optional t
 ## Per operating system notes
 
 ### Windows
-- Defaults skip `AppData` when scanning projects (it is a tool area, not a project area). Tool locations such as `%LOCALAPPDATA%` are read by the Tool caches tab instead.
+- Defaults skip `AppData` when scanning projects (it is a tool area, not a project area). Tool locations such as `%LOCALAPPDATA%` are read by the Tools & SDKs page instead.
 - Antivirus real-time scanning slows deletion of huge `node_modules`. Excluding your projects folder in Windows Security helps.
 - "File in use" errors mean an editor, dev server or emulator holds the files. Close them and retry.
 - Windows user Temp is offered by parts only. Files in use cannot be removed and are reported.
 
 ### macOS
-- Defaults skip `Library` when scanning projects; Xcode and simulator data are read by the Tool caches tab.
+- Defaults skip `Library` when scanning projects; Xcode and simulator data are read by the Tools & SDKs page.
 - Grant Full Disk Access if macOS blocks reading a folder (System Settings → Privacy & Security).
 - Trash on macOS is the real Trash, so use Finder to empty it.
 
 ### Linux
-- Defaults skip `.cache` for project scans; tool caches under `~/.cache` are listed in the Tool caches tab.
+- Defaults skip `.cache` for project scans; tool caches under `~/.cache` are listed in the Tools & SDKs page.
 - Trash follows the freedesktop standard (`~/.local/share/Trash`).
 
 ## Custom rules
