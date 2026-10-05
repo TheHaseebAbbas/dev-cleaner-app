@@ -76,10 +76,11 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
   const clean = () => (settings.confirm_before_delete || plan.some((e) => e.warnings.some((w) => w.level === "danger")) ? setConfirming(true) : run());
 
   const row = (c: GlobalCache) => {
+    // Rows always sit under a category header.
     const partsSel = c.parts.filter((p) => sel.has(p.path)).length;
     return (
       <TreeRow key={c.id} model={toModel(c)} maxBytes={maxBytes} checked={sel.has(c.id)} partial={!sel.has(c.id) && partsSel > 0}
-        focused={false} expanded={open.has(c.id)} selectedParts={sel} partsLocked={sel.has(c.id)}
+        depth={1} focused={false} expanded={open.has(c.id)} selectedParts={sel} partsLocked={sel.has(c.id)}
         onToggle={() => setSel((s) => { const n = flip(s, c.id); c.parts.forEach((p) => n.delete(p.path)); return n; })}
         onExpand={() => setOpen((s) => flip(s, c.id))} onFocus={() => c.parts.length && setOpen((s) => flip(s, c.id))}
         onTogglePart={(p) => setSel((s) => flip(s, p.path))}
@@ -152,7 +153,7 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
           ))}
           {viewOnly.length > 0 && (
             <div>
-              <GroupHeader icon="box" title="Disk images (view only)" sub="Never deleted. Notes explain how to shrink them." count={viewOnly.length} countLabel={viewOnly.length === 1 ? "item" : "items"} bytes={viewOnly.reduce((s, c) => s + c.disk_bytes, 0)} open={!collapsed.has("__view")} onToggleOpen={() => setCollapsed((s) => flip(s, "__view"))} />
+              <GroupHeader icon="box" title="Disk images" sub="View only, never deleted" count={viewOnly.length} countLabel={viewOnly.length === 1 ? "item" : "items"} bytes={viewOnly.reduce((s, c) => s + c.disk_bytes, 0)} open={!collapsed.has("__view")} onToggleOpen={() => setCollapsed((s) => flip(s, "__view"))} />
               {!collapsed.has("__view") && viewOnly.map(row)}
             </div>
           )}

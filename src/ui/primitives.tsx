@@ -38,7 +38,7 @@ export function Checkbox(props: { checked: boolean; indeterminate?: boolean; dis
       type="checkbox"
       aria-label={props.label}
       title={props.title}
-      className="h-4 w-4 cursor-pointer rounded border-slate-300 accent-emerald-600 disabled:cursor-not-allowed disabled:opacity-50"
+      className="cb"
       checked={props.checked}
       disabled={props.disabled}
       onClick={(e) => e.stopPropagation()}

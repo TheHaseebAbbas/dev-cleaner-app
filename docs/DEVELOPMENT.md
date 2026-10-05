@@ -145,7 +145,7 @@ Outputs are in `target/release/bundle/` (the Cargo workspace puts `target/` at t
 Build on each target OS (Tauri does not cross-compile bundles). Bump `version` in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` together. Code signing and notarization (macOS) or signing certificates (Windows) are needed to avoid OS warnings for public releases; see the Tauri distribution docs.
 
 ## The app icon
-The source is `app-icon.svg` (a folder with a broom). Regenerate every size and format after changing it:
+The source is `app-icon.svg` (a folder with a broom on an indigo background). Regenerate every size and format after changing it:
 ```bash
 npx tauri icon app-icon.svg
 rm -rf src-tauri/icons/android src-tauri/icons/ios   # not used

@@ -55,7 +55,7 @@ export function WarningPanel(props: { entries: WarnEntry[]; ack: boolean; onAck:
       </ul>
       {danger && !props.dryRun && (
         <label className="mt-3 flex cursor-pointer items-start gap-2 text-xs font-medium">
-          <input type="checkbox" className="mt-0.5 accent-red-600" checked={props.ack} onChange={(e) => props.onAck(e.target.checked)} />
+          <input type="checkbox" className="cb mt-0.5" checked={props.ack} onChange={(e) => props.onAck(e.target.checked)} />
           I understand this may remove something I need and cannot easily get back.
         </label>
       )}

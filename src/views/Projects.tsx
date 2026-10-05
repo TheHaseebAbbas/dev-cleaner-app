@@ -128,11 +128,11 @@ export function Projects(props: { scan: ReturnType<typeof useScan>; settings: Se
   }
   const clean = () => (settings.confirm_before_delete || plan.some((e) => e.warnings.some((w) => w.level === "danger")) ? setConfirming(true) : doDelete());
 
-  const row = (i: Item) => {
+  const row = (i: Item, depth = 0) => {
     const partsSel = i.parts.filter((p) => selected.has(p.path)).length;
     return (
       <TreeRow key={i.path} model={toModel(i)} maxBytes={maxBytes} checked={selected.has(i.path)} partial={!selected.has(i.path) && partsSel > 0}
-        focused={focus === i.path} expanded={expanded.has(i.path)} selectedParts={selected} partsLocked={selected.has(i.path)}
+        depth={depth} focused={focus === i.path} expanded={expanded.has(i.path)} selectedParts={selected} partsLocked={selected.has(i.path)}
         onToggle={() => toggleItem(i)} onExpand={() => setExpanded((s) => flip(s, i.path))} onFocus={() => setFocus(i.path)}
         onTogglePart={togglePart} onSelectAllParts={(all) => setAllParts(i, all)} />
     );
@@ -236,7 +236,7 @@ export function Projects(props: { scan: ReturnType<typeof useScan>; settings: Se
         <select className="input" value={eco} onChange={(e) => setEco(e.target.value)} aria-label="Type"><option value="all">All types</option>{ecosystems.map((x) => <option key={x}>{x}</option>)}</select>
         <label className="muted flex items-center gap-1.5 text-xs">Min size<input className="input w-16" type="number" min={0} value={minMb} onChange={(e) => setMinMb(Number(e.target.value))} />MB</label>
         <label className="muted flex items-center gap-1.5 text-xs">Idle<input className="input w-16" type="number" min={0} value={minAge} onChange={(e) => setMinAge(Number(e.target.value))} />days</label>
-        <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" checked={onlyIgnored} onChange={(e) => setOnlyIgnored(e.target.checked)} />Only git-ignored</label>
+        <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" className="cb" checked={onlyIgnored} onChange={(e) => setOnlyIgnored(e.target.checked)} />Only git-ignored</label>
         <div className="ml-auto"><Segmented<View> value={view} onChange={setView} options={[{ value: "project", label: "By project", icon: "folder" }, { value: "flat", label: "Flat", icon: "layers" }, { value: "treemap", label: "Map", icon: "box" }]} /></div>
       </div>
 
@@ -250,7 +250,7 @@ export function Projects(props: { scan: ReturnType<typeof useScan>; settings: Se
           ) : (
             <div className="min-w-[860px]">
               <ListHeader columns={COLUMNS} sortKey={sort.key} desc={sort.desc} onSort={onSort} allChecked={allSelected} someChecked={!allSelected && someSelected} onToggleAll={toggleAll} />
-              {view === "flat" ? filtered.map(row) : groups.map((g) => {
+              {view === "flat" ? filtered.map((i) => row(i, 0)) : groups.map((g) => {
                 const free = g.items.filter((i) => !i.protected);
                 const all = free.length > 0 && free.every((i) => selected.has(i.path));
                 const some = g.items.some((i) => selected.has(i.path) || i.parts.some((x) => selected.has(x.path)));
@@ -258,7 +258,7 @@ export function Projects(props: { scan: ReturnType<typeof useScan>; settings: Se
                   <div key={g.path}>
                     <GroupHeader icon="folder" title={g.name} sub={g.path} count={g.items.length} countLabel={g.items.length === 1 ? "folder" : "folders"} bytes={g.bytes} open={!collapsed.has(g.path)}
                       onToggleOpen={() => setCollapsed((s) => flip(s, g.path))} checked={all} partial={!all && some} onToggle={() => toggleGroup(g.items)} />
-                    {!collapsed.has(g.path) && g.items.map(row)}
+                    {!collapsed.has(g.path) && g.items.map((i) => row(i, 1))}
                   </div>
                 );
               })}
