@@ -60,7 +60,7 @@ npm run tauri build
 Outputs are under `target\release\bundle\`: an `.msi` (in `msi\`) and a setup `.exe` (in `nsis\`). Run either to install Dev Cleaner like a normal app. Windows SmartScreen may warn because the installer is not code-signed; choose More info, then Run anyway.
 
 ## What lives in AppData
-Besides your project folders, the **Global caches** tab checks fixed Windows locations: the Android SDK (`%LOCALAPPDATA%\Android\Sdk`, or whatever `ANDROID_HOME` / `ANDROID_SDK_ROOT` points to), npm, Yarn, pnpm, pip and NuGet caches, Dart pub cache, JetBrains and Android Studio caches, and your user Temp folder. Every SDK component (platforms, build-tools, NDK, emulator images...) is listed per version so you can remove just the versions you do not use. Click **Where it looks** on the Projects or Global caches tab to see the exact paths on your machine.
+Besides your project folders, the **Global caches** tab checks fixed Windows locations: the Android SDK (`%LOCALAPPDATA%\Android\Sdk`, or whatever `ANDROID_HOME` / `ANDROID_SDK_ROOT` points to), npm, Yarn, pnpm, pip and NuGet caches, Dart pub cache, JetBrains and Android Studio caches, VS Code cache folders (never your settings), and your user Temp folder. Docker Desktop's disk and WSL Linux distributions are shown for information only, because deleting them would wipe everything inside; the page tells you how to shrink them safely instead. Every SDK component (platforms, build-tools, NDK, emulator images...) is listed per version so you can remove just the versions you do not use. Click **Where it looks** on the Projects or Global caches tab to see the exact paths on your machine.
 
 ## Troubleshooting
 | Problem | Fix |

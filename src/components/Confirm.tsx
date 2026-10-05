@@ -5,6 +5,7 @@ export function Confirm(props: {
   children: ReactNode;
   confirmLabel: string;
   danger?: boolean;
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -15,7 +16,7 @@ export function Confirm(props: {
         <div className="mb-4 text-sm text-slate-600 dark:text-slate-300">{props.children}</div>
         <div className="flex justify-end gap-2">
           <button className="btn" onClick={props.onCancel}>Cancel</button>
-          <button className={`btn ${props.danger ? "btn-danger" : "btn-primary"}`} onClick={props.onConfirm}>
+          <button className={`btn ${props.danger ? "btn-danger" : "btn-primary"}`} disabled={props.confirmDisabled} onClick={props.onConfirm}>
             {props.confirmLabel}
           </button>
         </div>

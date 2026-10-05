@@ -4,11 +4,12 @@ import { Confirm } from "../components/Confirm";
 import { Details } from "../components/Details";
 import { LocationsDialog } from "../components/LocationsDialog";
 import { HowItWorks } from "../components/HowItWorks";
+import { needsAck, WarnBadge, WarningPanel, type WarnEntry } from "../components/Warnings";
 import { Treemap } from "../components/Treemap";
 
 type SortKey = "disk_bytes" | "project_name" | "ecosystem" | "file_count" | "project_last_modified";
 type View = "project" | "flat" | "treemap";
-interface PlanEntry { path: string; label: string; bytes: number }
+interface PlanEntry extends WarnEntry { bytes: number }
 
 export function Artifacts(props: {
   items: Item[];
@@ -34,6 +35,7 @@ export function Artifacts(props: {
   const [confirming, setConfirming] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
   const [showWhere, setShowWhere] = useState(false);
+  const [ack, setAck] = useState(false);
   const [result, setResult] = useState<DeleteOutcome[] | null>(null);
 
   useEffect(() => { api.listRules().then(setRules); }, [settings.custom_rules, settings.rule_enabled]);
@@ -68,14 +70,13 @@ export function Artifacts(props: {
   const plan: PlanEntry[] = useMemo(() => {
     const out: PlanEntry[] = [];
     for (const i of items) {
-      if (selected.has(i.path)) out.push({ path: i.path, label: i.rule_name, bytes: i.disk_bytes });
-      else for (const p of i.parts) if (selected.has(p.path)) out.push({ path: p.path, label: `${i.rule_name} / ${p.name}`, bytes: p.disk_bytes });
+      if (selected.has(i.path)) out.push({ path: i.path, label: i.path, bytes: i.disk_bytes, warnings: i.warnings });
+      else for (const p of i.parts) if (selected.has(p.path)) out.push({ path: p.path, label: p.path, bytes: p.disk_bytes, warnings: i.warnings });
     }
     return out;
   }, [items, selected]);
   const planBytes = plan.reduce((s, e) => s + e.bytes, 0);
   const totalAll = items.reduce((s, i) => s + i.disk_bytes, 0);
-  const planItems = items.filter((i) => plan.some((e) => e.path === i.path || i.parts.some((p) => p.path === e.path)));
   const focusItem = items.find((i) => i.path === focus) ?? null;
 
   const flip = (set: Set<string>, key: string) => {
@@ -143,7 +144,7 @@ export function Artifacts(props: {
           <td className="whitespace-nowrap px-3 py-2 text-right tabular-nums">{fmtBytes(i.disk_bytes)}</td>
           <td className="px-3 py-2 text-right tabular-nums">{i.file_count.toLocaleString()}</td>
           <td className="whitespace-nowrap px-3 py-2 text-right">{fmtDate(i.project_last_modified)}</td>
-          <td className="whitespace-nowrap px-3 py-2">{i.protected ? "🔒 protected" : i.git_ignored === false ? "⚠ not git-ignored" : i.risk}</td>
+          <td className="whitespace-nowrap px-3 py-2">{i.protected ? "🔒 protected" : i.risk}<WarnBadge warnings={i.warnings} /></td>
         </tr>
         {open && i.parts.map((p) => (
           <tr key={p.path} className="border-b border-slate-100 bg-slate-50 text-slate-700 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-300">
@@ -253,7 +254,7 @@ export function Artifacts(props: {
           {plan.length} folder{plan.length === 1 ? "" : "s"} selected · {fmtBytes(planBytes)} ·{" "}
           {settings.dry_run ? "dry run (nothing will be deleted)" : settings.delete_mode === "trash" ? "moves to Trash" : "deletes permanently"}
         </div>
-        <button className="btn btn-danger" disabled={!plan.length} onClick={() => (settings.confirm_before_delete ? setConfirming(true) : doDelete())}>
+        <button className="btn btn-danger" disabled={!plan.length} onClick={() => (settings.confirm_before_delete || needsAck(plan) ? (setAck(false), setConfirming(true)) : doDelete())}>
           {settings.dry_run ? "Simulate cleanup" : "Clean selected"}
         </button>
       </div>
@@ -265,14 +266,14 @@ export function Artifacts(props: {
         </Confirm>
       )}
       {confirming && (
-        <Confirm title={settings.dry_run ? "Simulate removing these folders?" : "Remove these folders?"} confirmLabel={settings.dry_run ? "Simulate" : settings.delete_mode === "trash" ? "Move to Trash" : "Delete permanently"} danger onConfirm={doDelete} onCancel={() => setConfirming(false)}>
+        <Confirm title={settings.dry_run ? "Simulate removing these folders?" : "Remove these folders?"} confirmLabel={settings.dry_run ? "Simulate" : settings.delete_mode === "trash" ? "Move to Trash" : "Delete permanently"} danger confirmDisabled={needsAck(plan) && !ack && !settings.dry_run} onConfirm={doDelete} onCancel={() => setConfirming(false)}>
           <p className="mb-2">{plan.length} folder{plan.length === 1 ? "" : "s"}, {fmtBytes(planBytes)}. {settings.delete_mode === "trash" && !settings.dry_run ? "They go to the Trash and can be restored." : ""} Your source code and other project files are not touched.</p>
           <ul className="max-h-60 space-y-1 overflow-auto rounded border border-slate-200 p-2 text-xs dark:border-slate-700">
             {plan.map((e) => (
               <li key={e.path} className="flex justify-between gap-3"><span className="break-all font-mono">{e.path}</span><span className="shrink-0 tabular-nums">{fmtBytes(e.bytes)}</span></li>
             ))}
           </ul>
-          {planItems.some((i) => i.git_ignored === false) && <p className="mt-2 font-medium text-amber-600">Some of these are not git-ignored; they may be tracked files.</p>}
+          <WarningPanel entries={plan} ack={ack} onAck={setAck} dryRun={settings.dry_run} />
         </Confirm>
       )}
       {result && (

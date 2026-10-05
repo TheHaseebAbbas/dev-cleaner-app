@@ -20,6 +20,30 @@ pub struct ScanOptions {
     pub max_depth: usize,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Level {
+    /// Worth knowing before you delete.
+    Caution,
+    /// Deleting may lose data that cannot be recreated, or break something that is required.
+    Danger,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Warning {
+    pub level: Level,
+    pub message: String,
+}
+
+impl Warning {
+    pub fn caution(m: impl Into<String>) -> Warning {
+        Warning { level: Level::Caution, message: m.into() }
+    }
+    pub fn danger(m: impl Into<String>) -> Warning {
+        Warning { level: Level::Danger, message: m.into() }
+    }
+}
+
 /// An independently deletable direct child of an artifact folder (e.g. `target/debug`).
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Part {
@@ -29,6 +53,8 @@ pub struct Part {
     pub apparent_bytes: u64,
     pub file_count: u64,
     pub last_modified: u64,
+    #[serde(default)]
+    pub warning: Option<Warning>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -57,6 +83,10 @@ pub struct Item {
     pub risk: Risk,
     /// `Some(true)` if git ignores it, `Some(false)` if tracked/not ignored, `None` if not a git repo.
     pub git_ignored: Option<bool>,
+    /// `Some(true)` if git tracks files inside it (so it is part of the repository).
+    pub git_tracked: Option<bool>,
+    /// Reasons to think twice before deleting; empty means nothing special.
+    pub warnings: Vec<Warning>,
     pub protected: bool,
 }
 
@@ -112,6 +142,15 @@ pub fn dir_stats(path: &Path) -> DirStats {
 /// Like [`dir_stats`], and also measures every direct child *directory* separately.
 /// Returns no parts unless there are at least two.
 pub fn dir_stats_parts(path: &Path) -> (DirStats, Vec<Part>) {
+    let (total, mut parts) = dir_stats_parts_raw(path);
+    if parts.len() < 2 {
+        parts.clear();
+    }
+    (total, parts)
+}
+
+/// Every direct child directory, even if there is only one.
+pub fn dir_stats_parts_raw(path: &Path) -> (DirStats, Vec<Part>) {
     use std::collections::BTreeMap;
     let mut total = DirStats::default();
     let mut kids: BTreeMap<std::ffi::OsString, (bool, DirStats)> = BTreeMap::new();
@@ -136,11 +175,9 @@ pub fn dir_stats_parts(path: &Path) -> (DirStats, Vec<Part>) {
             apparent_bytes: st.apparent_bytes,
             file_count: st.files,
             last_modified: st.newest,
+            warning: None,
         })
         .collect();
-    if parts.len() < 2 {
-        parts.clear();
-    }
     parts.sort_by(|a, b| b.disk_bytes.cmp(&a.disk_bytes));
     (total, parts)
 }
@@ -165,11 +202,12 @@ fn project_mtime(project: &Path, rules: &[Rule]) -> u64 {
     newest
 }
 
-fn git_ignored(project: &Path, artifact: &Path) -> Option<bool> {
+/// (ignored by git, tracked by git); `None` when not inside a git repository or git is missing.
+fn git_state(project: &Path, artifact: &Path) -> (Option<bool>, Option<bool>) {
     let mut dir = Some(project);
     while let Some(d) = dir {
         if d.join(".git").exists() {
-            let status = Command::new("git")
+            let ignored = Command::new("git")
                 .arg("-C")
                 .arg(d)
                 .args(["check-ignore", "-q", "--"])
@@ -177,16 +215,58 @@ fn git_ignored(project: &Path, artifact: &Path) -> Option<bool> {
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .status()
-                .ok()?;
-            return match status.code() {
-                Some(0) => Some(true),
-                Some(1) => Some(false),
-                _ => None,
+                .ok()
+                .and_then(|s| match s.code() {
+                    Some(0) => Some(true),
+                    Some(1) => Some(false),
+                    _ => None,
+                });
+            let tracked = if ignored == Some(true) {
+                Some(false)
+            } else {
+                Command::new("git")
+                    .arg("-C")
+                    .arg(d)
+                    .args(["ls-files", "-z", "--"])
+                    .arg(artifact)
+                    .stderr(Stdio::null())
+                    .output()
+                    .ok()
+                    .filter(|o| o.status.success())
+                    .map(|o| !o.stdout.is_empty())
             };
+            return (ignored, tracked);
         }
         dir = d.parent();
     }
-    None
+    (None, None)
+}
+
+const RECENT_DAYS: u64 = 3;
+const REQUIREMENT_FILES: &[&str] = &["requirements.txt", "pyproject.toml", "Pipfile", "environment.yml", "setup.py", "setup.cfg", "poetry.lock"];
+
+/// Reasons to think twice before deleting this folder.
+fn assess(rule: &Rule, project: &Path, git_ignored: Option<bool>, git_tracked: Option<bool>, project_mtime: u64, now: u64) -> Vec<Warning> {
+    let mut w = vec![];
+    if git_tracked == Some(true) {
+        w.push(Warning::danger("Git tracks files inside this folder, so it is part of your repository. Removing it deletes committed files, and any uncommitted changes in it are lost."));
+    } else if git_ignored == Some(false) {
+        w.push(Warning::caution("This folder is not listed in .gitignore. Make sure it only holds generated files and nothing you created by hand."));
+    }
+    if rule.id == "python-venv" && !REQUIREMENT_FILES.iter().any(|f| project.join(f).exists()) {
+        w.push(Warning::danger("No requirements.txt, pyproject.toml or Pipfile was found next to this environment, so you may not be able to recreate the packages installed in it."));
+    }
+    if rule.risk == crate::rules::Risk::High {
+        w.push(Warning::danger("This rule is marked high risk: the folder may hold data that is hard to recreate."));
+    }
+    if project_mtime > 0 && now.saturating_sub(project_mtime) < RECENT_DAYS * 86400 {
+        let days = now.saturating_sub(project_mtime) / 86400;
+        w.push(Warning::caution(format!(
+            "The project was changed {} ago. You may be working on it right now, and it will need a rebuild.",
+            if days == 0 { "today".to_string() } else { format!("{days} day{}", if days == 1 { "" } else { "s" }) }
+        )));
+    }
+    w
 }
 
 /// Phase 1: walk the roots and collect matching directories, never descending into a match.
@@ -237,7 +317,12 @@ where
             } else {
                 (dir_stats(path), vec![])
             };
+            let pm = project_mtime(project, &opts.rules);
+            let (ignored, tracked) = git_state(project, path);
+            let now = std::time::SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
             let item = Item {
+                warnings: assess(rule, project, ignored, tracked, pm, now),
+                git_tracked: tracked,
                 path: path.to_string_lossy().into_owned(),
                 rule_id: rule.id.clone(),
                 rule_name: rule.name.clone(),
@@ -252,12 +337,12 @@ where
                 file_count: st.files,
                 dir_count: st.dirs,
                 last_modified: st.newest,
-                project_last_modified: project_mtime(project, &opts.rules),
+                project_last_modified: pm,
                 regenerates_with: rule.regenerates_with.clone(),
                 description: rule.description.clone(),
                 parts,
                 risk: rule.risk,
-                git_ignored: git_ignored(project, path),
+                git_ignored: ignored,
                 protected: opts.protected_paths.iter().any(|p| path.starts_with(p)),
             };
             on_item(&item);

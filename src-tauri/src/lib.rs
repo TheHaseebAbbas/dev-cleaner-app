@@ -147,6 +147,7 @@ fn delete_global_caches(app: AppHandle, state: State<'_, AppState>, ids: Vec<Str
     let mut outcomes: Vec<DeleteOutcome> = vec![];
     for id in &ids {
         outcomes.push(match known.iter().find(|c| &c.id == id && c.exists) {
+            Some(c) if c.info_only => refused(&c.path, "view only: this cannot be removed from here", settings.dry_run),
             Some(c) if c.parts_only => refused(&c.path, "this folder can only be cleaned part by part", settings.dry_run),
             Some(c) => cleaner::delete_one(std::path::Path::new(&c.path), settings.delete_mode, settings.dry_run),
             None => refused(id, "unknown or missing cache", settings.dry_run),
@@ -155,6 +156,7 @@ fn delete_global_caches(app: AppHandle, state: State<'_, AppState>, ids: Vec<Str
     for p in &part_paths {
         let owner = known.iter().find(|c| c.parts.iter().any(|x| &x.path == p));
         outcomes.push(match owner {
+            Some(c) if c.info_only => refused(p, "view only: this cannot be removed from here", settings.dry_run),
             Some(c) if ids.contains(&c.id) => continue,
             Some(_) => cleaner::delete_one(std::path::Path::new(p), settings.delete_mode, settings.dry_run),
             None => refused(p, "not a known cache part", settings.dry_run),

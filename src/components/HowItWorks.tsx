@@ -40,7 +40,7 @@ export function HowItWorks(props: { settings: Settings; rules: Rule[]; onOpenSet
           <li>Dry run shows what would happen without deleting.</li>
           <li>Protected paths are listed but cannot be selected.</li>
           <li>It refuses your home folder, drive roots, symlinks, and anything that was not found by the last scan.</li>
-          <li>“not git-ignored” warns when a folder might be tracked by git.</li>
+          <li>Warnings: ⚠ <b>Check</b> means think twice (not in .gitignore, project changed in the last 3 days, a version other projects may still use). ⛔ <b>Required?</b> means it may be needed or impossible to recreate (tracked by git, a Python environment with no requirements file, your default Rust toolchain, an emulator with its data, Xcode archives). For ⛔ you must tick an extra “I understand” box before anything is removed.</li>
         </ul>
       </section>
     </div>

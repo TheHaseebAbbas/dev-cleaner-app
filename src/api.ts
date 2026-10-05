@@ -3,6 +3,12 @@ import { invoke } from "@tauri-apps/api/core";
 export type Risk = "low" | "medium" | "high";
 export type DeleteMode = "trash" | "permanent";
 
+export type Level = "caution" | "danger";
+export interface Warning {
+  level: Level;
+  message: string;
+}
+
 export interface Part {
   path: string;
   name: string;
@@ -10,6 +16,7 @@ export interface Part {
   apparent_bytes: number;
   file_count: number;
   last_modified: number;
+  warning?: Warning | null;
 }
 
 export interface Item {
@@ -30,6 +37,8 @@ export interface Item {
   parts: Part[];
   risk: Risk;
   git_ignored: boolean | null;
+  git_tracked: boolean | null;
+  warnings: Warning[];
   protected: boolean;
 }
 
@@ -74,6 +83,8 @@ export interface GlobalCache {
   note: string;
   parts: Part[];
   parts_only: boolean;
+  info_only: boolean;
+  warnings: Warning[];
 }
 
 export interface Location {

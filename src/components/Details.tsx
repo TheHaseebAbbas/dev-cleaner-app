@@ -1,3 +1,4 @@
+import { WarningLines } from "./Warnings";
 import { api, ageDays, fmtBytes, fmtDate, type Item } from "../api";
 
 function Row({ k, v }: { k: string; v: React.ReactNode }) {
@@ -16,6 +17,7 @@ export function Details({ item, onClose }: { item: Item; onClose: () => void }) 
         <h3 className="font-semibold">{item.project_name}</h3>
         <button className="btn !px-2 !py-0.5" onClick={onClose}>✕</button>
       </div>
+      <WarningLines warnings={item.warnings} />
       <p className="mb-2 rounded bg-slate-100 p-2 text-sm dark:bg-slate-800">{item.description || item.rule_name}</p>
       <div className="mb-2 rounded border border-red-200 bg-red-50 p-2 text-xs dark:border-red-900 dark:bg-red-950/40">
         <b>Cleaning removes only this folder:</b>

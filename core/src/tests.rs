@@ -180,3 +180,81 @@ fn windows_temp_is_parts_only() {
     let temp = list_global_caches_with(&env).into_iter().find(|c| c.id == "temp-win").unwrap();
     assert!(temp.parts_only && temp.parts.len() == 2);
 }
+
+fn has(item_warnings: &[crate::scanner::Warning], level: crate::scanner::Level, needle: &str) -> bool {
+    item_warnings.iter().any(|w| w.level == level && w.message.contains(needle))
+}
+
+#[test]
+fn warns_about_tracked_recent_and_unrecreatable_folders() {
+    use crate::scanner::Level::{Caution, Danger};
+    let t = tempfile::tempdir().unwrap();
+    let r = t.path();
+    // a node_modules that git tracks
+    write(&r.join("tracked/package.json"), 5);
+    write(&r.join("tracked/node_modules/a.js"), 5);
+    let git = |args: &[&str]| std::process::Command::new("git").arg("-C").arg(r.join("tracked")).args(args).output().unwrap();
+    git(&["init", "-q"]);
+    git(&["add", "-f", "node_modules/a.js"]);
+    // an untracked, not-ignored folder in another repo
+    write(&r.join("loose/package.json"), 5);
+    write(&r.join("loose/node_modules/a.js"), 5);
+    std::process::Command::new("git").arg("-C").arg(r.join("loose")).args(["init", "-q"]).output().unwrap();
+    // python venv without any requirements file
+    write(&r.join("py/.venv/pyvenv.cfg"), 5);
+    // python venv with requirements
+    write(&r.join("py2/requirements.txt"), 5);
+    write(&r.join("py2/.venv/pyvenv.cfg"), 5);
+
+    let items = scan(&opts(r), &AtomicBool::new(false), |_| {});
+    let get = |p: &str| items.iter().find(|i| i.path.ends_with(p)).unwrap();
+    assert_eq!(get("tracked/node_modules").git_tracked, Some(true));
+    assert!(has(&get("tracked/node_modules").warnings, Danger, "Git tracks"));
+    assert!(has(&get("loose/node_modules").warnings, Caution, ".gitignore"));
+    assert!(has(&get("py/.venv").warnings, Danger, "requirements"));
+    assert!(!has(&get("py2/.venv").warnings, Danger, "requirements"));
+    // freshly created files count as recent activity
+    assert!(has(&get("py2/.venv").warnings, Caution, "changed"));
+}
+
+#[test]
+fn vscode_only_offers_cache_folders_and_docker_is_view_only() {
+    use crate::global::{list_global_caches_with, Env};
+    let t = tempfile::tempdir().unwrap();
+    let appdata = t.path().join("Roaming");
+    write(&appdata.join("Code/Cache/x"), 100);
+    write(&appdata.join("Code/logs/y"), 10);
+    write(&appdata.join("Code/User/settings.json"), 10);
+    write(&appdata.join("Code/Backups/unsaved"), 10);
+    let local = t.path().join("Local");
+    write(&local.join("Docker/wsl/disk/docker_data.vhdx"), 1000);
+    write(&local.join("Packages/Canonical.Ubuntu_x/LocalState/ext4.vhdx"), 500);
+    let env = Env { os: "windows".into(), home: None, local_data: Some(local), data: Some(appdata), android_sdk_env: None };
+    let caches = list_global_caches_with(&env);
+    let code = caches.iter().find(|c| c.id == "vscode-caches-win").unwrap();
+    let names: Vec<_> = code.parts.iter().map(|p| p.name.as_str()).collect();
+    assert!(names.contains(&"Cache") && names.contains(&"logs"));
+    assert!(!names.contains(&"User") && !names.contains(&"Backups"));
+    assert!(code.parts_only);
+    let docker = caches.iter().find(|c| c.id == "docker-win").unwrap();
+    assert!(docker.info_only && docker.exists);
+    let wsl = caches.iter().find(|c| c.id == "wsl-distros-win").unwrap();
+    assert!(wsl.info_only && wsl.parts.len() == 1 && wsl.parts[0].name.contains("Ubuntu"));
+}
+
+#[test]
+fn rustup_default_toolchain_is_flagged() {
+    use crate::global::{list_global_caches_with, Env};
+    let t = tempfile::tempdir().unwrap();
+    let home = t.path();
+    write(&home.join(".rustup/toolchains/stable-x86_64-unknown-linux-gnu/bin/rustc"), 10);
+    write(&home.join(".rustup/toolchains/nightly-x86_64-unknown-linux-gnu/bin/rustc"), 10);
+    write(&home.join(".rustup/settings.toml"), 0);
+    std::fs::write(home.join(".rustup/settings.toml"), "version = \"12\"\ndefault_toolchain = \"stable-x86_64-unknown-linux-gnu\"\n").unwrap();
+    let env = Env { os: "linux".into(), home: Some(home.to_path_buf()), local_data: None, data: None, android_sdk_env: None };
+    let c = list_global_caches_with(&env).into_iter().find(|c| c.id == "rustup-toolchains").unwrap();
+    let stable = c.parts.iter().find(|p| p.name.starts_with("stable")).unwrap();
+    let nightly = c.parts.iter().find(|p| p.name.starts_with("nightly")).unwrap();
+    assert!(stable.warning.is_some() && nightly.warning.is_none());
+    assert!(!c.warnings.is_empty());
+}
