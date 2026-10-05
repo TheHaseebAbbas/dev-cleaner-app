@@ -1,5 +1,7 @@
 ## Dev Cleaner {{VERSION}}
 
+{{CHANGES}}
+
 ### Downloads
 
 | System | File | Notes |

@@ -183,9 +183,9 @@ Releases are unsigned for now, so each OS warns the first time the app opens. Th
 ### Publishing a release (GitHub Actions)
 `.github/workflows/release.yml` builds every OS when you push a version tag:
 
-1. Bump the version (see Versioning above) and merge to `main`.
+1. Bump the version (see Versioning above), add a `## <version>` section to `CHANGELOG.md` describing the release, and merge to `main`.
 2. Tag that commit with the same version: `git tag v1.0.0 && git push origin v1.0.0`. The workflow stops if the tag and `src-tauri/tauri.conf.json` disagree.
-3. The workflow creates a **draft** release with the notes from `.github/release-notes.md` (`{{VERSION}}` is filled in), then builds on Windows, macOS and Linux and attaches:
+3. The workflow creates a **draft** release whose notes are `.github/release-notes.md` with `{{VERSION}}` filled in and `{{CHANGES}}` replaced by that version's `CHANGELOG.md` section (it stops if the section is missing), then builds on Windows, macOS and Linux and attaches:
 
 | File | From |
 | --- | --- |
