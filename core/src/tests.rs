@@ -1,6 +1,11 @@
 use crate::{cleaner, rules::builtin_rules, scanner::*, settings::DeleteMode};
 use std::{fs, sync::atomic::AtomicBool};
 
+/// `path` ends with `suffix`, written with `/`, on every OS.
+fn ends(path: &str, suffix: &str) -> bool {
+    path.replace('\\', "/").ends_with(suffix)
+}
+
 fn write(p: &std::path::Path, bytes: usize) {
     fs::create_dir_all(p.parent().unwrap()).unwrap();
     fs::write(p, vec![b'x'; bytes]).unwrap();
@@ -41,7 +46,7 @@ fn finds_artifacts_with_correct_sizes_and_skips_false_positives() {
     write(&r.join("py2/venv/readme.txt"), 20);
 
     let items = scan(&opts(r), &AtomicBool::new(false), |_| {});
-    let by = |s: &str| items.iter().find(|i| i.path.ends_with(s));
+    let by = |s: &str| items.iter().find(|i| ends(&i.path, s));
     assert_eq!(by("web/node_modules").unwrap().apparent_bytes, 1500);
     assert_eq!(by("web/node_modules").unwrap().file_count, 2);
     assert_eq!(by("rs/target").unwrap().rule_id, "rust-target");
@@ -209,7 +214,7 @@ fn warns_about_tracked_recent_and_unrecreatable_folders() {
     write(&r.join("py2/.venv/pyvenv.cfg"), 5);
 
     let items = scan(&opts(r), &AtomicBool::new(false), |_| {});
-    let get = |p: &str| items.iter().find(|i| i.path.ends_with(p)).unwrap();
+    let get = |p: &str| items.iter().find(|i| ends(&i.path, p)).unwrap();
     // staged but not committed counts as uncommitted changes
     assert!(matches!(get("tracked/node_modules").git, crate::model::GitStatus::Tracked | crate::model::GitStatus::Modified));
     // Git-tracked folders are blocked by default

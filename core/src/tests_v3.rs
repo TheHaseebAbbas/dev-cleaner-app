@@ -11,6 +11,11 @@ use crate::trash_bin::{due, expiry, Hold, Holds, TrashEntry};
 use crate::workspace::{self, glob_match};
 use std::{fs, path::Path, path::PathBuf, sync::atomic::AtomicBool};
 
+/// `path` ends with `suffix`, written with `/`, on every OS.
+fn ends(path: &str, suffix: &str) -> bool {
+    path.replace('\\', "/").ends_with(suffix)
+}
+
 fn write(p: &Path, bytes: usize) {
     fs::create_dir_all(p.parent().unwrap()).unwrap();
     fs::write(p, vec![b'x'; bytes]).unwrap();
@@ -170,7 +175,7 @@ fn monorepo_members_belong_to_the_workspace() {
     assert_eq!((ws.kind.as_str(), ws.member.as_str()), ("npm", "apps/web"));
     assert!(workspace::find(&r.join("scratch/demo"), t.path()).is_none());
     let (items, _) = scan_with_progress(&opts(t.path()), &AtomicBool::new(false), |_| {}, |_| {});
-    let web = items.iter().find(|i| i.path.ends_with("web/node_modules")).unwrap();
+    let web = items.iter().find(|i| ends(&i.path, "web/node_modules")).unwrap();
     let root = items.iter().find(|i| i.path == r.join("node_modules").to_string_lossy()).unwrap();
     let demo = items.iter().find(|i| i.path.contains("demo")).unwrap();
     assert_eq!(web.project_name, "mono");

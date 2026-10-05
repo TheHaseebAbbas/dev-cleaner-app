@@ -1,0 +1,21 @@
+name: ci
+
+# Runs the core tests on every OS for pull requests and pushes to main, so
+# platform-specific failures show up before a release tag is pushed.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+      - run: cargo test -p dev_cleaner_core
