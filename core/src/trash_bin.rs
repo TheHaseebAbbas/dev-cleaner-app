@@ -82,7 +82,7 @@ mod imp {
                 let orig = it.original_path().to_string_lossy().into_owned();
                 let deleted = it.time_deleted.max(0) as u64;
                 let h = match_history(history, &orig, deleted)?;
-                let bytes = h.bytes_freed;
+                let bytes = h.estimated_reclaimed;
                 Some((it, deleted, bytes))
             })
             .collect())
@@ -112,6 +112,11 @@ mod imp {
                 None => TrashOutcome { id: id.clone(), path: String::new(), ok: false, error: Some("no longer in the Trash".into()), bytes: 0 },
                 Some((it, _, bytes)) => {
                     let path = it.original_path().to_string_lossy().into_owned();
+                    if restore {
+                        if let Err(why) = restore_check(&it.original_path()) {
+                            return TrashOutcome { id: id.clone(), path, ok: false, error: Some(why), bytes: 0 };
+                        }
+                    }
                     let res = if restore { os_limited::restore_all([it.clone()]) } else { os_limited::purge_all([it.clone()]) };
                     match res {
                         Ok(()) => TrashOutcome { id: id.clone(), path, ok: true, error: None, bytes: *bytes },
@@ -133,6 +138,26 @@ mod imp {
     pub fn list(_: &[HistoryEntry], _: u32) -> Result<Vec<TrashEntry>, String> { Err(MSG.into()) }
     pub fn restore(_: &[HistoryEntry], _: &[String]) -> Result<Vec<TrashOutcome>, String> { Err(MSG.into()) }
     pub fn purge(_: &[HistoryEntry], _: &[String]) -> Result<Vec<TrashOutcome>, String> { Err(MSG.into()) }
+}
+
+/// Before putting something back: the original place must be free, its parent must still exist,
+/// be a real folder (not a link or junction that now points elsewhere) and be writable.
+pub fn restore_check(original: &std::path::Path) -> Result<(), String> {
+    if std::fs::symlink_metadata(original).is_ok() {
+        return Err("Something already exists at the original location; it is not overwritten.".into());
+    }
+    let parent = original.parent().ok_or("The original location has no parent folder.")?;
+    let md = std::fs::symlink_metadata(parent).map_err(|_| "The original parent folder no longer exists.".to_string())?;
+    if let Some(kind) = crate::safety::redirection(parent) {
+        return Err(format!("The original parent folder is now a {kind}; restoring through it is refused."));
+    }
+    if !md.is_dir() {
+        return Err("The original parent is no longer a folder.".into());
+    }
+    if md.permissions().readonly() {
+        return Err("The original parent folder is read-only.".into());
+    }
+    Ok(())
 }
 
 /// Items Dev Cleaner moved to the Trash, newest first.

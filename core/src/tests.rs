@@ -13,6 +13,8 @@ fn opts(root: &std::path::Path) -> ScanOptions {
         exclude_names: vec![".git".into()],
         protected_paths: vec![],
         max_depth: 8,
+        policy: Policy::default(),
+        settings_hash: String::new(),
     }
 }
 
@@ -62,7 +64,7 @@ fn protected_and_cancel() {
     let mut o = opts(t.path());
     o.protected_paths = vec![t.path().join("p")];
     let items = scan(&o, &AtomicBool::new(false), |_| {});
-    assert!(items[0].protected);
+    assert_eq!(items[0].block.as_ref().unwrap().source, crate::model::BlockSource::User);
     let none = scan(&opts(t.path()), &AtomicBool::new(true), |_| {});
     assert!(none.is_empty());
 }
@@ -73,7 +75,7 @@ fn delete_dry_run_then_permanent() {
     let d = t.path().join("proj/node_modules");
     write(&d.join("a.js"), 4096);
     let dry = cleaner::delete_one(&d, DeleteMode::Permanent, true);
-    assert!(dry.ok && dry.bytes_freed > 0 && d.exists());
+    assert!(dry.ok && dry.size_before > 0 && d.exists());
     let real = cleaner::delete_one(&d, DeleteMode::Permanent, false);
     assert!(real.ok && !d.exists());
 }
@@ -208,8 +210,11 @@ fn warns_about_tracked_recent_and_unrecreatable_folders() {
 
     let items = scan(&opts(r), &AtomicBool::new(false), |_| {});
     let get = |p: &str| items.iter().find(|i| i.path.ends_with(p)).unwrap();
-    assert_eq!(get("tracked/node_modules").git_tracked, Some(true));
-    assert!(has(&get("tracked/node_modules").warnings, Danger, "Git tracks"));
+    // staged but not committed counts as uncommitted changes
+    assert!(matches!(get("tracked/node_modules").git, crate::model::GitStatus::Tracked | crate::model::GitStatus::Modified));
+    // Git-tracked folders are blocked by default
+    assert_eq!(get("tracked/node_modules").block.as_ref().unwrap().source, crate::model::BlockSource::Git);
+    assert_eq!(get("tracked/node_modules").risk, crate::model::Risk::Blocked);
     assert!(has(&get("loose/node_modules").warnings, Caution, ".gitignore"));
     assert!(has(&get("py/.venv").warnings, Danger, "requirements"));
     assert!(!has(&get("py2/.venv").warnings, Danger, "requirements"));
@@ -256,7 +261,8 @@ fn rustup_default_toolchain_is_flagged() {
     let stable = c.parts.iter().find(|p| p.name.starts_with("stable")).unwrap();
     let nightly = c.parts.iter().find(|p| p.name.starts_with("nightly")).unwrap();
     assert!(stable.warning.is_some() && nightly.warning.is_none());
-    assert!(!c.warnings.is_empty());
+    assert!(matches!(stable.usage, Some(crate::model::Usage::Used { .. })));
+    assert!(c.parts_only, "all toolchains at once cannot be removed");
 }
 
 #[test]
@@ -269,12 +275,16 @@ fn trash_expiry_rules() {
     assert!(is_expired(1000, 2, 1000 + 2 * 86_400));
 }
 
+fn hist(ts: u64, path: &str, mode: crate::settings::DeleteMode) -> crate::history::HistoryEntry {
+    serde_json::from_value(serde_json::json!({ "timestamp": ts, "path": path, "bytes_freed": 5, "mode": mode })).unwrap()
+}
+
 #[test]
 fn trash_matches_only_history_entries() {
-    use crate::{history::HistoryEntry, settings::DeleteMode, trash_bin::match_history};
+    use crate::{settings::DeleteMode, trash_bin::match_history};
     let h = vec![
-        HistoryEntry { timestamp: 100, path: "C:\\p\\node_modules".into(), bytes_freed: 5, mode: DeleteMode::Trash },
-        HistoryEntry { timestamp: 100, path: "/p/other".into(), bytes_freed: 5, mode: DeleteMode::Permanent },
+        hist(100, "C:\\p\\node_modules", DeleteMode::Trash),
+        hist(100, "/p/other", DeleteMode::Permanent),
     ];
     assert!(match_history(&h, "c:/p/node_modules/", 120).is_some());
     assert!(match_history(&h, "/p/other", 100).is_none(), "permanent deletes are not in the Trash");

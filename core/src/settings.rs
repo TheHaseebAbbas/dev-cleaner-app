@@ -1,6 +1,8 @@
 //! User settings, persisted as JSON.
 
-use crate::rules::{builtin_rules, Rule};
+use crate::model::Confidence;
+use crate::rules::{builtin_rules, sanitize_custom, Rule};
+use crate::scanner::{ActivityMode, Policy};
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, fs, io, path::{Path, PathBuf}};
 
@@ -33,6 +35,24 @@ pub struct Settings {
     pub scan_on_launch: bool,
     /// Days after which items Dev Cleaner moved to the Trash are removed for good. 0 keeps them forever.
     pub trash_retention_days: u32,
+    /// Show verdicts (Recommended / Review / Keep) and the quick-select buttons.
+    pub recommendations_enabled: bool,
+    /// Folders Git tracks cannot be selected. Off turns the block into a red warning.
+    pub protect_git_tracked: bool,
+    /// Look for keys, certificates and .env files (by name only) inside candidates.
+    pub detect_sensitive_files: bool,
+    /// Only detections at least this certain are recommended.
+    pub minimum_recommendation_confidence: Confidence,
+    /// What the Quick select button picks: "safe", "recommended" or "deep".
+    pub default_cleanup_profile: String,
+    /// How project activity is measured.
+    pub activity_mode: ActivityMode,
+    /// Warn when the scan is older than this many minutes when you clean.
+    pub stale_scan_minutes: u32,
+    /// Ask for a fresh scan when the current one is older than `stale_scan_minutes`.
+    pub require_rescan_before_cleanup: bool,
+    /// Advanced: custom rules may be marked dangerous.
+    pub allow_danger_custom_rules: bool,
 }
 
 impl Default for Settings {
@@ -53,6 +73,15 @@ impl Default for Settings {
             theme: "system".into(),
             scan_on_launch: false,
             trash_retention_days: 30,
+            recommendations_enabled: true,
+            protect_git_tracked: true,
+            detect_sensitive_files: true,
+            minimum_recommendation_confidence: Confidence::High,
+            default_cleanup_profile: "safe".into(),
+            activity_mode: ActivityMode::Fast,
+            stale_scan_minutes: 10,
+            require_rescan_before_cleanup: false,
+            allow_danger_custom_rules: false,
         }
     }
 }
@@ -75,10 +104,7 @@ impl Settings {
     /// Built-in plus custom rules with the user's enable overrides applied.
     pub fn effective_rules(&self) -> Vec<Rule> {
         let mut rules = builtin_rules();
-        rules.extend(self.custom_rules.iter().cloned().map(|mut r| {
-            r.custom = true;
-            r
-        }));
+        rules.extend(self.custom_rules.iter().cloned().map(|r| sanitize_custom(r, self.allow_danger_custom_rules)));
         for r in &mut rules {
             if let Some(e) = self.rule_enabled.get(&r.id) {
                 r.enabled = *e;
@@ -87,7 +113,24 @@ impl Settings {
         rules
     }
 
+    /// Inside a protected path, or containing one (component-aware, normalised).
     pub fn is_protected(&self, path: &Path) -> bool {
-        self.protected_paths.iter().any(|p| path.starts_with(p))
+        crate::safety::within_any(path, &self.protected_paths).is_some() || crate::safety::contains_any(path, &self.protected_paths).is_some()
+    }
+
+    pub fn policy(&self) -> Policy {
+        Policy {
+            protect_git_tracked: self.protect_git_tracked,
+            detect_sensitive_files: self.detect_sensitive_files,
+            activity_mode: self.activity_mode,
+            min_confidence: self.minimum_recommendation_confidence,
+        }
+    }
+
+    /// Identifies the settings that affect scan results.
+    pub fn hash(&self) -> String {
+        let mut h = std::collections::hash_map::DefaultHasher::new();
+        std::hash::Hash::hash(&serde_json::to_string(self).unwrap_or_default(), &mut h);
+        format!("{:016x}", std::hash::Hasher::finish(&h))
     }
 }
