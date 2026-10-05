@@ -62,6 +62,7 @@ Outputs are under `target\release\bundle\`: an `.msi` (in `msi\`) and a setup `.
 ## Troubleshooting
 | Problem | Fix |
 | --- | --- |
+| `npm.ps1 cannot be loaded because running scripts is disabled on this system` | PowerShell blocks scripts by default. Run `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned`, answer Y, and reopen the terminal. No Administrator needed. Alternative: use Command Prompt (cmd) or write `npm.cmd` instead of `npm`. |
 | `link.exe not found` or "linker `link.exe` failed" | Step 1 is missing or incomplete. Reinstall Build Tools with the C++ workload, then reopen the terminal. |
 | `cargo` or `node` is not recognized | Close and reopen the terminal so PATH refreshes. |
 | Blank white window | Install WebView2 (step 2). |
