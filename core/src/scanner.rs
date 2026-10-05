@@ -269,10 +269,36 @@ fn assess(rule: &Rule, project: &Path, git_ignored: Option<bool>, git_tracked: O
     w
 }
 
+/// Progress reported while scanning.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "phase", rename_all = "lowercase")]
+pub enum Progress {
+    /// Walking the folders looking for matches.
+    Discover { visited: u64, found: u64, current: String },
+    /// Measuring the folders that were found.
+    Measure { done: u64, total: u64, current: String },
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ScanSummary {
+    pub dirs_visited: u64,
+    pub found: u64,
+    pub elapsed_ms: u64,
+    pub cancelled: bool,
+    /// Scan folders that do not exist (so nothing could be scanned there).
+    pub missing_roots: Vec<String>,
+}
+
 /// Phase 1: walk the roots and collect matching directories, never descending into a match.
 pub fn discover(opts: &ScanOptions, cancel: &AtomicBool) -> Vec<(PathBuf, Rule)> {
+    discover_with(opts, cancel, &|_| {}).0
+}
+
+/// Like [`discover`], also reporting progress about every 200 folders. Returns the folders visited.
+pub fn discover_with(opts: &ScanOptions, cancel: &AtomicBool, on_progress: &(dyn Fn(Progress) + Sync)) -> (Vec<(PathBuf, Rule)>, u64) {
     let rules: Vec<&Rule> = opts.rules.iter().filter(|r| r.enabled).collect();
     let mut found: Vec<(PathBuf, Rule)> = vec![];
+    let mut visited: u64 = 0;
     for root in &opts.roots {
         let walker = WalkDir::new(root)
             .follow_links(false)
@@ -285,6 +311,10 @@ pub fn discover(opts: &ScanOptions, cancel: &AtomicBool) -> Vec<(PathBuf, Rule)>
                 if !e.file_type().is_dir() || e.depth() == 0 {
                     return true;
                 }
+                visited += 1;
+                if visited % 200 == 0 {
+                    on_progress(Progress::Discover { visited, found: found.len() as u64, current: e.path().to_string_lossy().into_owned() });
+                }
                 let name = e.file_name().to_string_lossy();
                 if let Some(rule) = rules.iter().find(|r| r.matches(e.path())) {
                     found.push((e.path().to_path_buf(), (*rule).clone()));
@@ -296,7 +326,7 @@ pub fn discover(opts: &ScanOptions, cancel: &AtomicBool) -> Vec<(PathBuf, Rule)>
     }
     found.sort_by(|a, b| a.0.cmp(&b.0));
     found.dedup_by(|a, b| a.0 == b.0);
-    found
+    (found, visited)
 }
 
 /// Full scan. `on_item` is called (possibly from worker threads) as each item is measured.
@@ -304,7 +334,21 @@ pub fn scan<F>(opts: &ScanOptions, cancel: &AtomicBool, on_item: F) -> Vec<Item>
 where
     F: Fn(&Item) + Sync,
 {
-    let candidates = discover(opts, cancel);
+    scan_with_progress(opts, cancel, on_item, |_| {}).0
+}
+
+/// Full scan with progress events and a summary.
+pub fn scan_with_progress<F, P>(opts: &ScanOptions, cancel: &AtomicBool, on_item: F, on_progress: P) -> (Vec<Item>, ScanSummary)
+where
+    F: Fn(&Item) + Sync,
+    P: Fn(Progress) + Sync,
+{
+    let started = std::time::Instant::now();
+    let missing_roots: Vec<String> = opts.roots.iter().filter(|r| !r.is_dir()).map(|r| r.to_string_lossy().into_owned()).collect();
+    let (candidates, dirs_visited) = discover_with(opts, cancel, &on_progress);
+    let total = candidates.len() as u64;
+    let done = std::sync::atomic::AtomicU64::new(0);
+    on_progress(Progress::Measure { done: 0, total, current: String::new() });
     let mut items: Vec<Item> = candidates
         .par_iter()
         .filter_map(|(path, rule)| {
@@ -346,9 +390,12 @@ where
                 protected: opts.protected_paths.iter().any(|p| path.starts_with(p)),
             };
             on_item(&item);
+            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+            on_progress(Progress::Measure { done: n, total, current: item.path.clone() });
             Some(item)
         })
         .collect();
     items.sort_by(|a, b| b.disk_bytes.cmp(&a.disk_bytes));
-    items
+    let summary = ScanSummary { dirs_visited, found: items.len() as u64, elapsed_ms: started.elapsed().as_millis() as u64, cancelled: cancel.load(Ordering::Relaxed), missing_roots };
+    (items, summary)
 }

@@ -37,7 +37,11 @@ export function Treemap(props: { items: Item[]; selected: string | null; onSelec
   layout(sorted, 0, 0, 100, 100, rects);
   const ecosystems = [...new Set(sorted.map((i) => i.ecosystem))];
   return (
-    <div className="relative h-[28rem] w-full overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
+    <div>
+    <div className="mb-2 flex flex-wrap gap-3 text-xs">
+      {ecosystems.map((e, i) => <span key={e} className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm" style={{ background: COLORS[i % COLORS.length] }} />{e}</span>)}
+    </div>
+    <div className="relative h-[28rem] w-full overflow-hidden rounded-xl border divider">
       {rects.map((r) => {
         const color = COLORS[ecosystems.indexOf(r.item.ecosystem) % COLORS.length];
         const big = r.w > 8 && r.h > 10;
@@ -63,7 +67,8 @@ export function Treemap(props: { items: Item[]; selected: string | null; onSelec
           </button>
         );
       })}
-      {rects.length === 0 && <div className="p-6 text-sm text-slate-500">Nothing to show yet.</div>}
+      {rects.length === 0 && <div className="muted p-6 text-sm">Nothing to show yet.</div>}
+    </div>
     </div>
   );
 }

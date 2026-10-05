@@ -21,6 +21,8 @@ struct AppState {
     cancel: Arc<AtomicBool>,
     scanning: Arc<AtomicBool>,
     globals: Mutex<Vec<GlobalCache>>,
+    global_cancel: Arc<AtomicBool>,
+    global_scanning: Arc<AtomicBool>,
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -65,12 +67,22 @@ fn start_scan(app: AppHandle, state: State<'_, AppState>, roots: Option<Vec<Path
     let scanning = state.scanning.clone();
     std::thread::spawn(move || {
         let emitter = app.clone();
-        let items = scanner::scan(&opts, &cancel, |it| {
-            let _ = emitter.emit("scan-item", it);
-        });
+        let progress = app.clone();
+        let (items, summary) = scanner::scan_with_progress(
+            &opts,
+            &cancel,
+            |it| {
+                // Keep the backend list in step so items can be removed while the scan is wrapping up.
+                emitter.state::<AppState>().items.lock().unwrap().push(it.clone());
+                let _ = emitter.emit("scan-item", it);
+            },
+            |p| {
+                let _ = progress.emit("scan-progress", p);
+            },
+        );
         *app.state::<AppState>().items.lock().unwrap() = items;
         scanning.store(false, Ordering::SeqCst);
-        let _ = app.emit("scan-done", cancel.load(Ordering::SeqCst));
+        let _ = app.emit("scan-done", summary);
     });
     Ok(())
 }
@@ -131,12 +143,39 @@ fn delete_items(app: AppHandle, state: State<'_, AppState>, paths: Vec<String>) 
 }
 
 #[tauri::command]
-async fn list_global_caches(state: State<'_, AppState>) -> Result<Vec<GlobalCache>, String> {
-    let list = tauri::async_runtime::spawn_blocking(global::list_global_caches)
-        .await
-        .map_err(|e| e.to_string())?;
-    *state.globals.lock().unwrap() = list.clone();
-    Ok(list)
+fn start_global_scan(app: AppHandle, state: State<'_, AppState>) -> Result<(), String> {
+    if state.global_scanning.swap(true, Ordering::SeqCst) {
+        return Err("a scan is already running".into());
+    }
+    state.global_cancel.store(false, Ordering::SeqCst);
+    state.globals.lock().unwrap().clear();
+    let cancel = state.global_cancel.clone();
+    let scanning = state.global_scanning.clone();
+    std::thread::spawn(move || {
+        let started = std::time::Instant::now();
+        let (a, b) = (app.clone(), app.clone());
+        let found = global::scan_global_caches(
+            &global::Env::detect(),
+            &cancel,
+            |c| {
+                a.state::<AppState>().globals.lock().unwrap().push(c.clone());
+                let _ = a.emit("global-item", c);
+            },
+            |p| {
+                let _ = b.emit("global-progress", p);
+            },
+        );
+        let n = found.len();
+        *app.state::<AppState>().globals.lock().unwrap() = found;
+        scanning.store(false, Ordering::SeqCst);
+        let _ = app.emit("global-done", serde_json::json!({ "cancelled": cancel.load(Ordering::SeqCst), "elapsed_ms": started.elapsed().as_millis() as u64, "found": n }));
+    });
+    Ok(())
+}
+
+#[tauri::command]
+fn cancel_global_scan(state: State<'_, AppState>) {
+    state.global_cancel.store(true, Ordering::SeqCst);
 }
 
 /// `ids` delete whole caches; `part_paths` delete single sub-folders of a known cache.
@@ -221,12 +260,9 @@ fn reveal_path(path: String) -> Result<(), String> {
 
 #[tauri::command]
 fn disk_space() -> Option<(u64, u64)> {
-    // (total, free) bytes of the volume holding the home directory, via `df`.
+    // (total, free) bytes of the volume that holds the home directory.
     let home = dev_cleaner_core_home()?;
-    let out = std::process::Command::new("df").args(["-Pk"]).arg(home).output().ok()?;
-    let text = String::from_utf8_lossy(&out.stdout);
-    let cols: Vec<&str> = text.lines().nth(1)?.split_whitespace().collect();
-    Some((cols.get(1)?.parse::<u64>().ok()? * 1024, cols.get(3)?.parse::<u64>().ok()? * 1024))
+    Some((fs2::total_space(&home).ok()?, fs2::available_space(&home).ok()?))
 }
 
 fn dev_cleaner_core_home() -> Option<PathBuf> {
@@ -239,7 +275,7 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             get_settings, save_settings, list_rules, start_scan, cancel_scan, delete_items,
-            get_items, get_locations, list_global_caches, delete_global_caches, get_history, reveal_path, disk_space
+            get_items, get_locations, start_global_scan, cancel_global_scan, delete_global_caches, get_history, reveal_path, disk_space
         ])
         .run(tauri::generate_context!())
         .expect("error while running Dev Cleaner");

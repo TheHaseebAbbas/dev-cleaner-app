@@ -29,6 +29,8 @@ pub struct Settings {
     pub min_age_days: u64,
     pub max_depth: usize,
     pub theme: String,
+    /// Start scanning as soon as the app opens.
+    pub scan_on_launch: bool,
 }
 
 impl Default for Settings {
@@ -47,6 +49,7 @@ impl Default for Settings {
             min_age_days: 0,
             max_depth: 8,
             theme: "system".into(),
+            scan_on_launch: false,
         }
     }
 }

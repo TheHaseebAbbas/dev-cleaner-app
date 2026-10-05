@@ -303,48 +303,94 @@ fn wsl_distros(env: &Env) -> Option<GlobalCache> {
     })
 }
 
-pub fn list_global_caches_with(env: &Env) -> Vec<GlobalCache> {
-    let mut out: Vec<GlobalCache> = defs_for(env)
-        .map(|(t, path)| {
-            let exists = path.is_dir();
-            let (st, mut parts) = match (exists, t.split, t.allow.is_empty()) {
-                (false, _, _) => Default::default(),
-                (true, true, true) => dir_stats_parts(&path),
-                (true, true, false) => {
-                    let (_, all) = dir_stats_parts_raw(&path);
-                    let kept: Vec<Part> = all.into_iter().filter(|p| t.allow.contains(&p.name.as_str())).collect();
-                    let mut st = crate::scanner::DirStats::default();
-                    for p in &kept {
-                        st.disk_bytes += p.disk_bytes;
-                        st.files += p.file_count;
-                    }
-                    (st, kept)
-                }
-                (true, false, _) => (dir_stats(&path), vec![]),
-            };
-            if t.id == "rustup-toolchains" {
-                if let Some(def) = rustup_default(env) {
-                    for p in parts.iter_mut().filter(|p| def.starts_with(p.name.as_str()) || p.name.starts_with(&def)) {
-                        p.warning = Some(Warning::danger(format!("{} is your default toolchain. Removing it breaks cargo and rustc until you reinstall it.", p.name)));
-                    }
-                }
+fn measure(t: &Def, path: PathBuf, env: &Env) -> GlobalCache {
+    let exists = path.is_dir();
+    let (st, mut parts) = match (exists, t.split, t.allow.is_empty()) {
+        (false, _, _) => Default::default(),
+        (true, true, true) => dir_stats_parts(&path),
+        (true, true, false) => {
+            let (_, all) = dir_stats_parts_raw(&path);
+            let kept: Vec<Part> = all.into_iter().filter(|p| t.allow.contains(&p.name.as_str())).collect();
+            let mut st = crate::scanner::DirStats::default();
+            for p in &kept {
+                st.disk_bytes += p.disk_bytes;
+                st.files += p.file_count;
             }
-            GlobalCache {
-                id: t.id.into(),
-                name: t.name.into(),
-                category: t.category.into(),
-                path: path.to_string_lossy().into_owned(),
-                exists,
-                disk_bytes: st.disk_bytes,
-                file_count: st.files,
-                note: t.note.into(),
-                parts,
-                parts_only: t.parts_only,
-                info_only: t.info_only,
-                warnings: t.warn.map(|(level, m)| Warning { level, message: m.into() }).into_iter().collect(),
+            (st, kept)
+        }
+        (true, false, _) => (dir_stats(&path), vec![]),
+    };
+    if t.id == "rustup-toolchains" {
+        if let Some(def) = rustup_default(env) {
+            for p in parts.iter_mut().filter(|p| def.starts_with(p.name.as_str()) || p.name.starts_with(&def)) {
+                p.warning = Some(Warning::danger(format!("{} is your default toolchain. Removing it breaks cargo and rustc until you reinstall it.", p.name)));
             }
+        }
+    }
+    GlobalCache {
+        id: t.id.into(),
+        name: t.name.into(),
+        category: t.category.into(),
+        path: path.to_string_lossy().into_owned(),
+        exists,
+        disk_bytes: st.disk_bytes,
+        file_count: st.files,
+        note: t.note.into(),
+        parts,
+        parts_only: t.parts_only,
+        info_only: t.info_only,
+        warnings: t.warn.map(|(level, m)| Warning { level, message: m.into() }).into_iter().collect(),
+    }
+}
+
+/// Progress of the global scan: `done` of `total` locations checked, `current` is the one just finished.
+#[derive(Debug, Clone, Serialize)]
+pub struct GlobalProgress {
+    pub done: u64,
+    pub total: u64,
+    pub current: String,
+}
+
+/// Measures every known location in parallel, calling `on_item` for each one that exists and
+/// `on_progress` after every location (found or not).
+pub fn scan_global_caches<F, P>(env: &Env, cancel: &std::sync::atomic::AtomicBool, on_item: F, on_progress: P) -> Vec<GlobalCache>
+where
+    F: Fn(&GlobalCache) + Sync,
+    P: Fn(GlobalProgress) + Sync,
+{
+    use rayon::prelude::*;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    let defs: Vec<(&Def, PathBuf)> = defs_for(env).collect();
+    let total = defs.len() as u64 + u64::from(env.os == "windows");
+    let done = AtomicU64::new(0);
+    let mut out: Vec<GlobalCache> = defs
+        .into_par_iter()
+        .filter_map(|(t, path)| {
+            if cancel.load(Ordering::Relaxed) {
+                return None;
+            }
+            let c = measure(t, path, env);
+            if c.exists {
+                on_item(&c);
+            }
+            let n = done.fetch_add(1, Ordering::Relaxed) + 1;
+            on_progress(GlobalProgress { done: n, total, current: c.name.clone() });
+            c.exists.then_some(c)
         })
         .collect();
-    out.extend(wsl_distros(env));
+    if !cancel.load(Ordering::Relaxed) {
+        if let Some(w) = wsl_distros(env) {
+            on_item(&w);
+            on_progress(GlobalProgress { done: total, total, current: w.name.clone() });
+            if w.exists {
+                out.push(w);
+            }
+        }
+    }
+    out.sort_by(|a, b| b.disk_bytes.cmp(&a.disk_bytes));
     out
+}
+
+pub fn list_global_caches_with(env: &Env) -> Vec<GlobalCache> {
+    scan_global_caches(env, &std::sync::atomic::AtomicBool::new(false), |_| {}, |_| {})
 }

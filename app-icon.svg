@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#34d399"/><stop offset="1" stop-color="#047857"/></linearGradient>
+    <linearGradient id="fold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#d1fae5"/></linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="208" fill="url(#bg)"/>
+  <!-- folder -->
+  <path d="M208 340a48 48 0 0 1 48-48h150a48 48 0 0 1 36 16l36 40h290a48 48 0 0 1 48 48v31H208z" fill="#a7f3d0"/>
+  <path d="M176 420a48 48 0 0 1 48-48h576a48 48 0 0 1 48 48v300a48 48 0 0 1-48 48H224a48 48 0 0 1-48-48z" fill="url(#fold)"/>
+  <!-- broom sweep -->
+  <g transform="rotate(-35 560 600)">
+    <rect x="548" y="330" width="26" height="250" rx="13" fill="#047857"/>
+    <path d="M470 580h182l36 130H434z" fill="#059669"/>
+    <path d="M498 600v100M528 600v108M558 600v110M588 600v108M618 600v100" stroke="#a7f3d0" stroke-width="12" stroke-linecap="round"/>
+  </g>
+  <!-- sparkles -->
+  <path d="M760 480l16 40 40 16-40 16-16 40-16-40-40-16 40-16z" fill="#fbbf24"/>
+  <path d="M300 640l9 22 22 9-22 9-9 22-9-22-22-9 22-9z" fill="#34d399"/>
+</svg>

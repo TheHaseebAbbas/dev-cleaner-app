@@ -70,6 +70,7 @@ export interface Settings {
   min_age_days: number;
   max_depth: number;
   theme: "system" | "light" | "dark";
+  scan_on_launch: boolean;
 }
 
 export interface GlobalCache {
@@ -119,6 +120,30 @@ export interface HistoryEntry {
   mode: DeleteMode;
 }
 
+export type ScanProgress =
+  | { phase: "discover"; visited: number; found: number; current: string }
+  | { phase: "measure"; done: number; total: number; current: string };
+
+export interface ScanSummary {
+  dirs_visited: number;
+  found: number;
+  elapsed_ms: number;
+  cancelled: boolean;
+  missing_roots: string[];
+}
+
+export interface GlobalProgress {
+  done: number;
+  total: number;
+  current: string;
+}
+
+export interface GlobalSummary {
+  cancelled: boolean;
+  elapsed_ms: number;
+  found: number;
+}
+
 export const api = {
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<void>("save_settings", { settings }),
@@ -126,7 +151,8 @@ export const api = {
   startScan: () => invoke<void>("start_scan", { roots: null }),
   cancelScan: () => invoke<void>("cancel_scan"),
   deleteItems: (paths: string[]) => invoke<DeleteOutcome[]>("delete_items", { paths }),
-  listGlobalCaches: () => invoke<GlobalCache[]>("list_global_caches"),
+  startGlobalScan: () => invoke<void>("start_global_scan"),
+  cancelGlobalScan: () => invoke<void>("cancel_global_scan"),
   getLocations: () => invoke<Locations>("get_locations"),
   getItems: () => invoke<Item[]>("get_items"),
   deleteGlobalCaches: (ids: string[], partPaths: string[]) =>
@@ -154,4 +180,20 @@ export function fmtDate(secs: number): string {
 
 export function ageDays(secs: number): number {
   return secs ? Math.floor((Date.now() / 1000 - secs) / 86400) : Infinity;
+}
+
+export function fmtDuration(ms: number): string {
+  const s = Math.round(ms / 1000);
+  if (s < 60) return `${Math.max(s, ms > 0 ? 1 : 0)}s`;
+  return `${Math.floor(s / 60)}m ${s % 60}s`;
+}
+
+export function fmtAge(secs: number): string {
+  if (!secs) return "unknown";
+  const d = ageDays(secs);
+  if (d < 1) return "today";
+  if (d < 2) return "yesterday";
+  if (d < 31) return `${d} days ago`;
+  if (d < 365) return `${Math.floor(d / 30)} mo ago`;
+  return `${Math.floor(d / 365)} y ago`;
 }
