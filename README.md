@@ -12,6 +12,9 @@ Tauri 2 (Rust) backend + React/TypeScript UI. One codebase for macOS, Windows an
 - Settings: scan folders, excluded names, protected paths, per-rule toggles, custom rules, delete mode, depth, theme.
 - History log with total space reclaimed.
 
+## Setup guides
+Step-by-step: [Windows](docs/WINDOWS_SETUP.md) · [macOS](docs/MACOS_SETUP.md) · [Linux](docs/LINUX_SETUP.md)
+
 ## Develop
 ```bash
 npm install
