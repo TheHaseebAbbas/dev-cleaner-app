@@ -1,0 +1,84 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  /* Light neutrals: 50 page, 100 subtle surface, 200 border, 500 secondary text, 900 text. */
+  --color-slate-50: #f7f8fa;
+  --color-slate-100: #f1f3f7;
+  --color-slate-200: #e2e5ea;
+  --color-slate-300: #cdd2da;
+  --color-slate-400: #8a919e;
+  --color-slate-500: #5f6673;
+  --color-slate-600: #4a505c;
+  --color-slate-700: #343a46;
+  --color-slate-800: #22262f;
+  --color-slate-900: #171a21;
+  --color-slate-950: #0b0d12;
+}
+
+/* Dark neutrals: 950 page, 900 surface, 800 raised, 700 border, 500 muted, 400 secondary, 100 text. */
+.dark {
+  --color-slate-50: #f3f4f6;
+  --color-slate-100: #f3f4f6;
+  --color-slate-200: #dcdfe5;
+  --color-slate-300: #bcc1cb;
+  --color-slate-400: #a1a7b3;
+  --color-slate-500: #8c93a1;
+  --color-slate-600: #5a6170;
+  --color-slate-700: #333948;
+  --color-slate-800: #262b36;
+  --color-slate-900: #181c25;
+  --color-slate-950: #0b0d12;
+  color-scheme: dark;
+}
+
+:root { font-size: 14px; --surface: #ffffff; }
+.dark { --surface: #11141b; }
+body { @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100; font-family: var(--font-sans); font-feature-settings: "cv11", "ss01"; }
+code, kbd, .mono { font-family: var(--font-mono); }
+* { scrollbar-width: thin; }
+
+/* Surfaces: level 2 is .card (lists, sections); level 3 floats (dialogs, popovers, selection bar). */
+.card { @apply rounded-[10px] border border-slate-200 bg-white shadow-[0_1px_2px_rgba(16,24,40,.05)] dark:border-slate-700/70 dark:bg-slate-900 dark:shadow-none; }
+.surface-subtle { @apply bg-slate-100 dark:bg-slate-800/70; }
+.float { @apply rounded-[14px] border border-slate-200 bg-white shadow-[0_12px_32px_-8px_rgba(16,24,40,.25)] dark:border-slate-700 dark:bg-slate-800 dark:shadow-[0_12px_32px_-8px_rgba(0,0,0,.7)]; }
+.divider { @apply border-slate-200 dark:border-slate-700/70; }
+.muted { @apply text-slate-500 dark:text-slate-400; }
+.faint { @apply text-slate-400 dark:text-slate-500; }
+
+.btn { @apply inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-500 disabled:cursor-not-allowed disabled:opacity-50 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700; }
+.btn-primary { @apply border-indigo-600 bg-indigo-600 text-white hover:border-indigo-700 hover:bg-indigo-700 dark:border-indigo-500 dark:bg-indigo-500 dark:text-white dark:hover:border-indigo-400 dark:hover:bg-indigo-400; }
+.btn-danger { @apply border-red-600 bg-red-600 text-white hover:bg-red-700 dark:border-red-500 dark:bg-red-600 dark:text-white dark:hover:bg-red-500; }
+.btn-ghost { @apply border-transparent bg-transparent shadow-none hover:bg-slate-200/70 dark:bg-transparent dark:hover:bg-slate-800; }
+.btn-sm { @apply px-2 py-1 text-xs; }
+.input { @apply rounded-lg border border-slate-300 bg-white px-2.5 py-1.5 text-sm text-slate-900 placeholder:text-slate-400 focus-visible:outline-2 focus-visible:outline-indigo-500 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-100; }
+kbd { @apply rounded border border-slate-300 bg-slate-100 px-1 py-0.5 text-[10px] font-medium text-slate-500 dark:border-slate-600 dark:bg-slate-800 dark:text-slate-400; }
+
+@keyframes slide-indeterminate { 0% { left: -35%; } 100% { left: 100%; } }
+@keyframes rise { from { transform: translateY(8px); opacity: 0; } to { transform: none; opacity: 1; } }
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.rise { animation: rise .16s ease-out; }
+.fade { animation: fade .16s ease-out; }
+@media (prefers-reduced-motion: reduce) { .rise, .fade { animation: none; } }
+
+/* Checkboxes: drawn by us so they read clearly on both themes. */
+input[type="checkbox"].cb {
+  appearance: none; -webkit-appearance: none;
+  width: 1rem; height: 1rem; flex-shrink: 0;
+  border: 1.5px solid #8a919e; border-radius: 5px; background: #fff;
+  display: inline-grid; place-content: center; cursor: pointer;
+  transition: background-color .12s, border-color .12s;
+}
+.dark input[type="checkbox"].cb { background: #0b0d12; border-color: #737a88; }
+input[type="checkbox"].cb:hover:not(:disabled) { border-color: #4f46e5; }
+.dark input[type="checkbox"].cb:hover:not(:disabled) { border-color: #818cf8; }
+input[type="checkbox"].cb:checked, input[type="checkbox"].cb:indeterminate { background-color: #4f46e5; border-color: #4f46e5; }
+.dark input[type="checkbox"].cb:checked, .dark input[type="checkbox"].cb:indeterminate { background-color: #6366f1; border-color: #6366f1; }
+input[type="checkbox"].cb:checked { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3.5 8.5l3 3 6-7'/%3E%3C/svg%3E"); background-size: 100% 100%; }
+input[type="checkbox"].cb:indeterminate { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M4 8h8'/%3E%3C/svg%3E"); background-size: 100% 100%; }
+input[type="checkbox"].cb:disabled { opacity: .45; cursor: not-allowed; }
+input[type="checkbox"].cb:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
