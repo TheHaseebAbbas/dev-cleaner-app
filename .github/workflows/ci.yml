@@ -1,9 +1,9 @@
 name: ci
 
-# Runs the core tests on every OS for pull requests and pushes to main, so
-# platform-specific failures show up before a release tag is pushed.
+# Runs the core tests on every OS when a pull request is merged into main
+# (any push to main), so platform-specific failures show up before a release
+# tag is pushed.
 on:
-  pull_request:
   push:
     branches: [main]
 
