@@ -68,3 +68,7 @@ src/         React UI: views, components, hooks
 docs/        Guides
 app-icon.svg Source of the app icon (see the Developer guide to regenerate)
 ```
+
+## License
+
+Released under the [GNU General Public License v3.0](LICENSE). You may use and modify Dev Cleaner, and if you share a modified version you must share its source under the same license.

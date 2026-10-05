@@ -209,6 +209,7 @@ export function AboutDialog({ onClose }: { onClose: () => void }) {
         <dt className="muted">Built with</dt><dd>Tauri 2, Rust, React and TypeScript</dd>
         <dt className="muted">Your data</dt><dd>settings.json and history.jsonl in the app config folder</dd>
         <dt className="muted">Shortcuts</dt><dd>Ctrl/Cmd+K opens the command palette</dd>
+        <dt className="muted">License</dt><dd>GNU GPL v3.0</dd>
         <dt className="muted">Source</dt>
         <dd className="flex min-w-0 items-center gap-2"><span className="mono truncate text-xs">{REPO_URL}</span><button className="btn btn-sm shrink-0" onClick={copy}>{copied ? "Copied" : "Copy link"}</button></dd>
       </dl>
