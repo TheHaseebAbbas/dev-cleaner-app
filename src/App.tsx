@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, fmtBytes, type DeleteOutcome, type Settings } from "./api";
+import { api, fmtBytes, type DeleteReport, type Settings } from "./api";
 import { AboutDialog } from "./components/dialogs";
 import { CommandPalette, type PaletteCommand } from "./components/CommandPalette";
 import { emitCmd } from "./hooks/commands";
@@ -100,8 +100,8 @@ export default function App() {
     }, 300);
   }, []);
 
-  const onDeleted = useCallback((out: DeleteOutcome[]) => {
-    if (out[0]?.dry_run) return;
+  const onDeleted = useCallback((r: DeleteReport) => {
+    if (r.dry_run) return;
     scan.refresh();
     refreshDisk();
   }, [scan, refreshDisk]);

@@ -1,6 +1,6 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, type Rule, type Settings } from "../api";
+import { api, CONFIDENCE_LABEL, COST_LABEL, fmtBytes, fmtDuration, RISK_LABEL, type Confidence, type Diagnostics, type Risk, type Rule, type Settings } from "../api";
 import { Icon, type IconName } from "../ui/Icon";
 import { Badge, PageHeader, Segmented, Toggle } from "../ui/primitives";
 
@@ -48,33 +48,97 @@ function Num(props: { value: number; min: number; max?: number; suffix: string; 
   return <div className="flex items-center gap-2"><input className="input w-20 text-right" type="number" min={props.min} max={props.max} value={props.value} onChange={(e) => props.onChange(Number(e.target.value))} /><span className="muted text-sm">{props.suffix}</span></div>;
 }
 
-type SectionId = "appearance" | "cleaning" | "safety" | "scanning" | "protection" | "rules" | "trash";
+type SectionId = "appearance" | "cleaning" | "recommendations" | "safety" | "scanning" | "protection" | "rules" | "trash" | "diagnostics";
 
 const META: Record<SectionId, { title: string; icon: IconName; description: string }> = {
   appearance: { title: "Appearance", icon: "eye", description: "How the app looks." },
   cleaning: { title: "Cleaning", icon: "sliders", description: "What happens when you reclaim space." },
-  safety: { title: "Safety", icon: "shield", description: "The protections that are always on." },
+  recommendations: { title: "Recommendations", icon: "sparkles", description: "How Dev Cleaner suggests what to remove." },
+  safety: { title: "Safety", icon: "shield", description: "Checks that keep important files out of reach." },
   scanning: { title: "Scanning", icon: "search", description: "Where and how deep to look." },
   protection: { title: "Protection", icon: "lock", description: "Folders that can be seen but never removed." },
   rules: { title: "Rules", icon: "layers", description: "Which kinds of folders are recognised." },
   trash: { title: "Trash", icon: "trash", description: "When removed folders are cleared for good." },
+  diagnostics: { title: "Diagnostics", icon: "info", description: "What the last scans and cleanups did." },
 };
-const ORDER: SectionId[] = ["appearance", "cleaning", "safety", "scanning", "protection", "rules", "trash"];
+const ORDER: SectionId[] = ["appearance", "cleaning", "recommendations", "safety", "scanning", "protection", "rules", "trash", "diagnostics"];
 
 const SAFETY_POINTS = [
   ["Source code is never selected.", "A folder is offered only when it matches a rule and its project file sits next to it."],
-  ["You always see what will happen.", "Risky folders ask for an extra confirmation, even if you turned confirmations off."],
-  ["Tracked files are flagged.", "Folders Git tracks are marked May be required."],
-  ["System and view-only locations are never deleted.", "Dev Cleaner can show them but does not remove them."],
-  ["Protected paths cannot be selected.", "Add your own in Protection."],
+  ["Every item is checked again before it is removed.", "If it moved, changed or became a link since the scan, it is skipped."],
+  ["System and personal folders are blocked.", "Your home folder, Documents, system folders and credential folders such as .ssh can never be removed."],
+  ["Links are never followed.", "Symlinks, junctions and mount points are skipped, so cleaning cannot reach outside a folder."],
+  ["Risky items ask for an extra confirmation.", "Even if you turned confirmations off. Permanently deleting emulators, simulators or archives asks you to type DELETE."],
+  ["Unfinished scans cannot be cleaned.", "Stop a scan and the results stay visible, but cleaning waits for a full scan."],
 ];
+
+const CONFIDENCE_OPTIONS: Confidence[] = ["medium", "high", "very_high"];
+
+function DiagnosticsPanel() {
+  const [d, setD] = useState<Diagnostics | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => { api.getDiagnostics().then(setD, (e) => setErr(String(e))); }, []);
+  if (err) return <Group><p className="text-sm text-red-600">{err}</p></Group>;
+  if (!d) return <Group><p className="muted text-sm">Loading…</p></Group>;
+  const row = (k: string, v: ReactNode) => <Fragment key={k}><dt className="muted">{k}</dt><dd className="break-all">{v}</dd></Fragment>;
+  const scanBlock = (title: string, sc: Diagnostics["project_scan"]) => (
+    <Group>
+      <div className="font-medium">{title}</div>
+      {!sc ? <p className="muted text-xs">No scan yet in this session.</p> : (
+        <dl className="grid grid-cols-[11rem_1fr] gap-y-1 text-xs">
+          {row("Scan id", <code>{sc.scan_id}</code>)}
+          {row("Finished", sc.completed_at ? new Date(sc.completed_at * 1000).toLocaleString() : "running")}
+          {row("Complete", sc.complete ? "Yes" : sc.cancelled ? "No, stopped" : "No")}
+          {row("Found", sc.found.toLocaleString())}
+          {row("Folders / files visited", `${sc.dirs_visited.toLocaleString()} / ${sc.files_visited.toLocaleString()}`)}
+          {row("Time", `${fmtDuration(sc.elapsed_ms)} (finding ${fmtDuration(sc.discovery_ms)}, measuring ${fmtDuration(sc.measure_ms)})`)}
+          {row("Data examined", fmtBytes(sc.bytes_examined))}
+          {row("Unreadable entries", sc.measure_errors.toLocaleString())}
+          {row("Rules", `${sc.rules_active} active, rules version ${sc.rules_version}`)}
+          {sc.missing_roots.length > 0 && row("Missing folders", sc.missing_roots.join(", "))}
+          {sc.skipped.map((k) => row(`Skipped: ${k.reason}`, <span title={k.examples.join("\n")}>{k.count.toLocaleString()}</span>))}
+        </dl>
+      )}
+    </Group>
+  );
+  return (
+    <>
+      {scanBlock("Last project scan", d.project_scan)}
+      {scanBlock("Last tools & SDKs scan", d.global_scan)}
+      <Group>
+        <div className="font-medium">Rules</div>
+        <dl className="grid grid-cols-[11rem_1fr] gap-y-1 text-xs">
+          {row("Active", `${d.rules_enabled} of ${d.rules_total} (${d.custom_rules} custom)`)}
+          {row("Turned off", d.rules_disabled.join(", ") || "none")}
+          {row("Scan folders", d.scan_roots.join(", ") || "none")}
+          {row("Skipped names", d.exclude_names.join(", ") || "none")}
+          {row("Protected", d.protected_paths.join(", ") || "none")}
+          {row("Data folder", <code>{d.data_folder}</code>)}
+        </dl>
+      </Group>
+      <Group>
+        <div className="font-medium">Recent cleanups</div>
+        {!d.recent_operations.length ? <p className="muted text-xs">None yet.</p> : (
+          <ul className="space-y-1 text-xs">
+            {[...d.recent_operations].reverse().map((o) => (
+              <li key={o.timestamp} className="flex justify-between gap-3">
+                <span>{new Date(o.timestamp * 1000).toLocaleString()}{o.report.dry_run ? " (dry run)" : ""}</span>
+                <span className="muted">{o.report.removed} removed · {o.report.failed} failed · {o.report.blocked} blocked · {fmtBytes(o.report.estimated_bytes)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Group>
+    </>
+  );
+}
 
 export function SettingsView(props: { settings: Settings; onChange: (s: Settings) => void; onAbout: () => void }) {
   const s = props.settings;
   const [section, setSection] = useState<SectionId | null>(null);
   const [rules, setRules] = useState<Rule[]>([]);
   const [filter, setFilter] = useState("");
-  const [draft, setDraft] = useState({ name: "", dirs: "", markers: "", description: "" });
+  const [draft, setDraft] = useState<{ name: string; dirs: string; markers: string; description: string; risk: Risk }>({ name: "", dirs: "", markers: "", description: "", risk: "caution" });
   const [details, setDetails] = useState<Set<string>>(new Set());
   useEffect(() => { api.listRules().then(setRules); }, [s.custom_rules, s.rule_enabled]);
   const set = <K extends keyof Settings>(k: K, v: Settings[K]) => props.onChange({ ...s, [k]: v });
@@ -86,17 +150,19 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
     const rule: Rule = {
       id: `custom-${Date.now()}`, name: draft.name.trim(), ecosystem: "Custom", dir_names: dirs,
       parent_markers: split(draft.markers), self_markers: [],
-      regenerates_with: "user-defined", description: draft.description.trim() || "Custom rule you added.", split: false, risk: "medium", enabled: true, custom: true,
+      regenerates_with: "user-defined", description: draft.description.trim() || "Custom rule you added.", split: false, risk: draft.risk, enabled: true, custom: true,
     };
     set("custom_rules", [...s.custom_rules, rule]);
-    setDraft({ name: "", dirs: "", markers: "", description: "" });
+    setDraft({ name: "", dirs: "", markers: "", description: "", risk: "caution" });
   }
 
   const activeRules = rules.filter((r) => r.enabled).length;
   const summary: Record<SectionId, string> = {
     appearance: s.theme === "system" ? "System" : s.theme === "dark" ? "Dark" : "Light",
     cleaning: `${s.dry_run ? "Dry run · " : ""}${s.delete_mode === "trash" ? "Move to Trash" : "Delete permanently"}`,
-    safety: "Always on",
+    recommendations: s.recommendations_enabled ? `On · Quick select ${s.default_cleanup_profile}` : "Off",
+    safety: s.protect_git_tracked && s.detect_sensitive_files ? "All checks on" : "Some checks off",
+    diagnostics: "",
     scanning: `${s.scan_roots.length} folder${s.scan_roots.length === 1 ? "" : "s"} · ${s.max_depth} levels`,
     protection: `${s.protected_paths.length} protected path${s.protected_paths.length === 1 ? "" : "s"}`,
     rules: `${activeRules} active · ${s.custom_rules.length} custom`,
@@ -112,7 +178,7 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
             <button key={id} onClick={() => setSection(id)} className="flex w-full items-center gap-3 border-b px-4 py-3 text-left outline-none divider transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 dark:hover:bg-slate-800/50">
               <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-100 text-indigo-700 dark:bg-indigo-500/20 dark:text-indigo-300"><Icon name={META[id].icon} /></div>
               <div className="min-w-0 flex-1"><div className="font-medium">{META[id].title}</div><div className="muted text-[13px]">{META[id].description}</div></div>
-              <span className="muted shrink-0 text-[13px]">{summary[id]}</span>
+              {summary[id] && <span className="muted shrink-0 text-[13px]">{summary[id]}</span>}
               <Icon name="chevron-right" className="h-4 w-4 shrink-0 text-slate-400" />
             </button>
           ))}
@@ -156,6 +222,30 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
           </Group>
         )}
 
+        {section === "recommendations" && (
+          <Group>
+            <Toggle checked={s.recommendations_enabled} onChange={(v) => set("recommendations_enabled", v)} label="Show recommendations" description="Mark each item Recommended, Review or Keep, with the reasons, and offer Quick select." />
+            <Field label="Quick select default" hint="Safe picks build output and caches that rebuild without downloads. Deep also picks Review items, never Keep.">
+              <Segmented value={s.default_cleanup_profile} onChange={(v) => set("default_cleanup_profile", v)} options={[{ value: "safe", label: "Safe" }, { value: "recommended", label: "Recommended" }, { value: "deep", label: "Deep" }]} />
+            </Field>
+            <Field label="Minimum confidence" hint="Only detections at least this certain are marked Recommended. Lock files and .gitignore raise confidence.">
+              <Segmented value={s.minimum_recommendation_confidence} onChange={(v) => set("minimum_recommendation_confidence", v)} options={CONFIDENCE_OPTIONS.map((c) => ({ value: c, label: CONFIDENCE_LABEL[c] }))} />
+            </Field>
+            <Field label="Project activity" hint="Fast looks at the project's top-level files. Accurate finds the newest file anywhere in the project, which takes longer.">
+              <Segmented value={s.activity_mode} onChange={(v) => set("activity_mode", v)} options={[{ value: "fast", label: "Fast" }, { value: "accurate", label: "Accurate" }]} />
+            </Field>
+            <p className="muted text-xs">Takes effect on the next scan.</p>
+          </Group>
+        )}
+
+        {section === "safety" && (
+          <Group>
+            <Toggle checked={s.protect_git_tracked} onChange={(v) => set("protect_git_tracked", v)} label="Block folders Git tracks" description="Recommended. Off shows a red warning instead and asks for confirmation." />
+            <Toggle checked={s.detect_sensitive_files} onChange={(v) => set("detect_sensitive_files", v)} label="Look for keys and secrets" description="Checks file names (never contents). Signing keys block a folder; .env files and certificates add a warning." />
+            <Field label="Warn when a scan is older than" hint="Cleaning an old scan still checks each item again first."><Num value={s.stale_scan_minutes} min={1} max={1440} suffix="minutes" onChange={(n) => set("stale_scan_minutes", Math.max(1, Math.round(n)))} /></Field>
+            <Toggle checked={s.require_rescan_before_cleanup} onChange={(v) => set("require_rescan_before_cleanup", v)} label="Require a fresh scan" description="Turn cleaning off until you rescan once the scan is older than the time above." />
+          </Group>
+          )}
         {section === "safety" && (
           <Group>
             <ul className="space-y-3">
@@ -166,7 +256,7 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
                 </li>
               ))}
             </ul>
-            <p className="muted text-xs">These protections cannot be turned off. See docs/SAFETY.md for the full list.</p>
+            <p className="muted text-xs">These protections are always on. See docs/SAFETY.md for the full list.</p>
           </Group>
         )}
 
@@ -186,6 +276,8 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
             <PathList title="Protected paths" hint="Anything inside these is listed but cannot be selected. Use it for projects you work on daily." values={s.protected_paths} onChange={(v) => set("protected_paths", v)} pick placeholder="path to protect" />
           </Group>
         )}
+
+        {section === "diagnostics" && <DiagnosticsPanel />}
 
         {section === "trash" && (
           <Group>
@@ -227,6 +319,10 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
                                 <dt className="muted">Folder names</dt><dd className="mono">{r.dir_names.join(", ")}</dd>
                                 <dt className="muted">Next to</dt><dd className="mono">{r.parent_markers.length ? r.parent_markers.join(" or ") : r.self_markers.length ? `contains ${r.self_markers.join(" or ")}` : "any project"}</dd>
                                 <dt className="muted">Comes back with</dt><dd className="mono">{r.regenerates_with}</dd>
+                                <dt className="muted">Risk</dt><dd>{RISK_LABEL[r.risk]}</dd>
+                                {r.rebuild_cost && <><dt className="muted">Rebuild / download</dt><dd>{COST_LABEL[r.rebuild_cost]} / {COST_LABEL[r.network_cost ?? "unknown"]}</dd></>}
+                                {r.base_confidence && <><dt className="muted">Confidence</dt><dd>{CONFIDENCE_LABEL[r.base_confidence]}{r.confidence_markers?.length ? `, higher beside ${r.confidence_markers.join(", ")}` : ""}</dd></>}
+                                {r.consequence && <><dt className="muted">If removed</dt><dd>{r.consequence}</dd></>}
                               </dl>
                             )}
                           </div>
@@ -249,7 +345,14 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
                 <label className="block"><span className="muted mb-1 block text-xs">Folder names (comma separated)</span><input className="input w-full" placeholder="out, .cache" value={draft.dirs} onChange={(e) => setDraft({ ...draft, dirs: e.target.value })} /></label>
                 <label className="block"><span className="muted mb-1 block text-xs">Marker files (optional)</span><input className="input w-full" placeholder="package.json" value={draft.markers} onChange={(e) => setDraft({ ...draft, markers: e.target.value })} /></label>
                 <label className="block"><span className="muted mb-1 block text-xs">Description (optional)</span><input className="input w-full" placeholder="Generated by my build" value={draft.description} onChange={(e) => setDraft({ ...draft, description: e.target.value })} /></label>
+                <label className="block"><span className="muted mb-1 block text-xs">Risk</span>
+                  <select className="input w-full" value={draft.risk} onChange={(e) => setDraft({ ...draft, risk: e.target.value as Risk })}>
+                    <option value="safe">Safe: rebuilds by itself</option><option value="caution">Caution: needs downloads or a long rebuild</option>
+                    {s.allow_danger_custom_rules && <option value="danger">Danger: may lose local state</option>}
+                  </select></label>
               </div>
+              <p className="muted text-xs">Custom rules are never marked more than medium confidence, so their matches are offered for review rather than recommended.</p>
+              <Toggle checked={s.allow_danger_custom_rules} onChange={(v) => set("allow_danger_custom_rules", v)} label="Allow dangerous custom rules" description="Advanced. Lets a custom rule be marked Danger, which always asks for confirmation." />
               <button className="btn btn-primary" onClick={addCustom} disabled={!draft.name.trim() || !draft.dirs.trim()}><Icon name="plus" />Add rule</button>
             </Group>
           </>

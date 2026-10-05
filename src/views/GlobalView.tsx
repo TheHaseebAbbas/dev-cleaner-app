@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
-import { api, fmtBytes, fmtDuration, type DeleteOutcome, type GlobalCache, type Settings } from "../api";
+import { api, failedReport, fmtBytes, fmtDuration, type DeleteReport, type GlobalCache, type Preview, type Settings } from "../api";
+import { Details } from "../components/Details";
 import { ConfirmDialog, LocationsDialog, ResultDialog, type PlanEntry } from "../components/dialogs";
 import { ScanPanel } from "../components/ScanPanel";
 import { SelectionBar } from "../components/SelectionBar";
@@ -8,33 +9,40 @@ import { useCmd } from "../hooks/commands";
 import { useElapsed, type useGlobalScan } from "../hooks/useScans";
 import { Icon } from "../ui/Icon";
 import { Badge, Banner, EmptyState, MetricStrip, PageHeader, SkeletonRows } from "../ui/primitives";
-import { WarnBadge } from "../ui/warnings";
+import { BlockBadge, RiskBadge, VerdictBadge, WarnBadge } from "../ui/warnings";
 
 const VIEW_ONLY_NOTE = "Dev Cleaner can show this location but does not delete it.";
 
-function toModel(c: GlobalCache): RowModel {
+function toModel(c: GlobalCache, verdicts: boolean): RowModel {
+  const blockedPart = c.parts.some((p) => p.block);
   return {
     key: c.id, name: c.name, desc: c.note || c.path, meta: c.path, bytes: c.disk_bytes, parts: c.parts, viewOnly: c.info_only,
-    lockedReason: c.info_only ? VIEW_ONLY_NOTE : c.parts_only ? "Choose individual parts" : undefined,
+    blockedReason: c.info_only ? undefined : c.block?.reason,
+    lockedReason: c.info_only ? VIEW_ONLY_NOTE : c.parts_only ? "Choose individual parts" : blockedPart ? "Some parts are protected, so choose parts one at a time" : undefined,
     badges: (
       <>
-        {c.info_only && <Badge icon="eye" title={VIEW_ONLY_NOTE}>View only</Badge>}
+        {c.info_only ? <Badge icon="eye" title={VIEW_ONLY_NOTE}>View only</Badge> : <BlockBadge block={c.block} />}
+        {verdicts && !c.info_only && !c.parts_only && <VerdictBadge rec={c.recommendation} block={c.block} />}
+        {!c.block && <RiskBadge risk={c.risk} />}
         <WarnBadge warnings={c.warnings} />
       </>
     ),
   };
 }
 
-export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; settings: Settings; onOpenSettings: () => void; onDeleted: (o: DeleteOutcome[]) => void }) {
+export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; settings: Settings; onOpenSettings: () => void; onDeleted: (r: DeleteReport) => void }) {
   const { scan, settings } = props;
   const { caches, status } = scan;
-  const [sel, setSel] = useState<Set<string>>(new Set()); // cache ids and part paths
+  const [sel, setSel] = useState<Set<string>>(new Set()); // cache ids and part ids
   const [open, setOpen] = useState<Set<string>>(new Set());
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [confirming, setConfirming] = useState(false);
   const [busy, setBusy] = useState(false);
   const [showWhere, setShowWhere] = useState(false);
-  const [result, setResult] = useState<DeleteOutcome[] | null>(null);
+  const [result, setResult] = useState<DeleteReport | null>(null);
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [focus, setFocus] = useState<string | null>(null);
+  const verdicts = settings.recommendations_enabled;
   const elapsed = useElapsed(scan.startedAt, status === "scanning");
 
   const flip = (s: Set<string>, k: string) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; };
@@ -42,10 +50,12 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
   const removable = sorted.filter((c) => !c.info_only);
   const viewOnly = sorted.filter((c) => c.info_only);
   const maxBytes = sorted.reduce((m, c) => Math.max(m, c.disk_bytes), 0);
-  const total = removable.reduce((s, c) => s + c.disk_bytes, 0);
+  const total = removable.filter((c) => !c.block).reduce((s, c) => s + (c.reclaimable_bytes || c.disk_bytes), 0);
+  const recommended = removable.filter((c) => !c.block && c.recommendation.verdict === "recommended").reduce((s, c) => s + (c.reclaimable_bytes || c.disk_bytes), 0);
+  const focusCache = caches.find((c) => c.id === focus) ?? null;
   const categories = useMemo(() => {
     const m = new Map<string, GlobalCache[]>();
-    for (const c of removable) m.set(c.category, [...(m.get(c.category) ?? []), c]);
+    for (const c of removable) m.set(c.group, [...(m.get(c.group) ?? []), c]);
     return [...m.entries()].map(([name, list]) => ({ name, list, bytes: list.reduce((s, c) => s + c.disk_bytes, 0) })).sort((a, b) => b.bytes - a.bytes);
   }, [removable]);
 
@@ -57,52 +67,69 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
     setCollapsed(v ? new Set() : new Set(groupKeys));
   };
 
-  const plan: (PlanEntry & { whole: boolean })[] = removable.flatMap((c): (PlanEntry & { whole: boolean })[] =>
+  const plan: (PlanEntry & { id: string; whole: boolean })[] = removable.flatMap((c): (PlanEntry & { id: string; whole: boolean })[] =>
     sel.has(c.id)
-      ? [{ path: c.id, label: c.path, bytes: c.disk_bytes, whole: true, warnings: [...c.warnings, ...c.parts.flatMap((p) => (p.warning ? [p.warning] : []))] }]
-      : c.parts.filter((p) => sel.has(p.path)).map((p) => ({ path: p.path, label: p.path, bytes: p.disk_bytes, whole: false, warnings: [...c.warnings, ...(p.warning ? [p.warning] : [])] })));
+      ? [{ id: c.id, path: c.path, label: c.path, bytes: c.reclaimable_bytes || c.disk_bytes, whole: true, warnings: [...c.warnings, ...c.parts.flatMap((p) => (p.warning ? [p.warning] : []))] }]
+      : c.parts.filter((p) => sel.has(p.id)).map((p) => ({ id: p.id, path: p.path, label: p.path, bytes: p.reclaimable_bytes || p.disk_bytes, whole: false, warnings: [...c.warnings, ...(p.warning ? [p.warning] : [])] })));
   const bytes = plan.reduce((s, e) => s + e.bytes, 0);
+  const scanId = scan.summary?.scan_id ?? caches[0]?.scan_id ?? "";
+  const ids = () => plan.filter((e) => e.whole).map((e) => e.id);
+  const partIds = () => plan.filter((e) => !e.whole).map((e) => e.id);
+  const cleanBlocked = status === "scanning" ? "Wait for the scan to finish" : status === "stopped" ? "The scan did not finish. Run a full scan to clean." : undefined;
 
-  async function run() {
+  async function run(ack: boolean) {
     setBusy(true);
     try {
-      const out = await api.deleteGlobalCaches(plan.filter((e) => e.whole).map((e) => e.path), plan.filter((e) => !e.whole).map((e) => e.path));
+      const out = await api.deleteGlobalCaches(scanId, ids(), partIds(), ack);
       setConfirming(false);
       setResult(out);
       props.onDeleted(out);
-      if (!out[0]?.dry_run) { setSel(new Set()); scan.start(); }
+      if (!out.dry_run) { setSel(new Set()); setFocus(null); scan.start(); }
     } catch (e) {
       setConfirming(false);
-      setResult([{ path: "(request)", ok: false, bytes_freed: 0, error: String(e), dry_run: false }]);
+      setResult(failedReport(String(e)));
     } finally { setBusy(false); }
   }
-  const clean = () => (settings.confirm_before_delete || plan.some((e) => e.warnings.some((w) => w.level === "danger")) ? setConfirming(true) : run());
+  async function clean() {
+    setPreview(null);
+    if (settings.confirm_before_delete) setConfirming(true);
+    try {
+      const pv = await api.previewGlobalCleanup(scanId, ids(), partIds());
+      const quiet = !pv.needs_ack && !pv.critical && !pv.problems.length && !plan.some((e) => e.warnings.length);
+      if (!settings.confirm_before_delete && quiet) return run(false);
+      setPreview(pv);
+      setConfirming(true);
+    } catch (e) {
+      setConfirming(false);
+      setResult(failedReport(String(e)));
+    }
+  }
 
   useCmd((cmd) => {
     if (cmd === "scan") { status === "scanning" ? scan.stop() : scan.start(); }
-    else if (cmd === "select-all") setSel((s) => (s.size ? new Set() : new Set(removable.filter((c) => !c.parts_only).map((c) => c.id))));
-    else if (cmd === "delete") { if (plan.length && status !== "scanning" && !busy) clean(); }
-    else if (cmd === "escape") { if (sel.size) setSel(new Set()); else return false; }
+    else if (cmd === "select-all") setSel((s) => (s.size ? new Set() : new Set(removable.filter((c) => !c.parts_only && !c.block && !c.parts.some((p) => p.block)).map((c) => c.id))));
+    else if (cmd === "delete") { if (plan.length && !cleanBlocked && !busy) clean(); }
+    else if (cmd === "escape") { if (focus) setFocus(null); else if (sel.size) setSel(new Set()); else return false; }
     else return false;
   });
 
   const row = (c: GlobalCache) => {
-    const partsSel = c.parts.filter((p) => sel.has(p.path)).length;
+    const partsSel = c.parts.filter((p) => sel.has(p.id)).length;
     return (
-      <TreeRow key={c.id} model={toModel(c)} maxBytes={maxBytes} checked={sel.has(c.id)} partial={!sel.has(c.id) && partsSel > 0}
-        depth={1} focused={false} expanded={open.has(c.id)} selectedParts={sel} partsLocked={sel.has(c.id)}
-        onToggle={() => setSel((s) => { const n = flip(s, c.id); c.parts.forEach((p) => n.delete(p.path)); return n; })}
-        onExpand={() => setOpen((s) => flip(s, c.id))} onFocus={() => c.parts.length && setOpen((s) => flip(s, c.id))}
-        onTogglePart={(p) => setSel((s) => flip(s, p.path))}
-        onSelectAllParts={(all) => setSel((s) => { const n = new Set(s); c.parts.forEach((p) => (all ? n.add(p.path) : n.delete(p.path))); return n; })} />
+      <TreeRow key={c.id} model={toModel(c, verdicts)} maxBytes={maxBytes} checked={sel.has(c.id)} partial={!sel.has(c.id) && partsSel > 0}
+        depth={1} focused={focus === c.id} expanded={open.has(c.id)} selectedParts={sel} partsLocked={sel.has(c.id)}
+        onToggle={() => setSel((s) => { const n = flip(s, c.id); c.parts.forEach((p) => n.delete(p.id)); return n; })}
+        onExpand={() => setOpen((s) => flip(s, c.id))} onFocus={() => setFocus(c.id)}
+        onTogglePart={(p) => setSel((s) => flip(s, p.id))}
+        onSelectAllParts={(all) => setSel((s) => { const n = new Set(s); c.parts.forEach((p) => (all && !p.block ? n.add(p.id) : n.delete(p.id))); return n; })} />
     );
   };
 
   const header = (actions?: React.ReactNode) => <PageHeader title="Tools & SDKs" subtitle="Caches, SDKs, simulators and developer data outside your projects." actions={actions} />;
   const dialogs = (
     <>
-      {confirming && <ConfirmDialog entries={plan} settings={settings} busy={busy} onConfirm={run} onCancel={() => setConfirming(false)} what="Tools will download or rebuild what they need the next time you use them." />}
-      {result && <ResultDialog result={result} onClose={() => setResult(null)} />}
+      {confirming && <ConfirmDialog entries={plan} preview={preview} settings={settings} busy={busy} onConfirm={run} onCancel={() => setConfirming(false)} what="Tools will download or rebuild what they need the next time you use them." />}
+      {result && <ResultDialog report={result} onClose={() => setResult(null)} />}
       {showWhere && <LocationsDialog onClose={() => setShowWhere(false)} onOpenSettings={props.onOpenSettings} />}
     </>
   );
@@ -151,15 +178,16 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
     <div className="flex h-full flex-col">
       {header(<>{scanBtn}<button className="btn btn-ghost" onClick={() => setShowWhere(true)} aria-label="Where it looks" title="Where it looks"><Icon name="eye" className="h-[18px] w-[18px]" /></button></>)}
       <MetricStrip note={scanning ? "Still scanning…" : status === "stopped" ? "Scan stopped" : `Scan complete · ${fmtDuration(scan.summary?.elapsed_ms ?? 0)}`}
-        items={[{ label: "Reclaimable", value: fmtBytes(total), hero: true }, { label: "Locations", value: sorted.length, hint: viewOnly.length ? `${viewOnly.length} view only` : undefined }, { label: "Selected", value: fmtBytes(bytes) }]} />
+        items={[{ label: "Reclaimable", value: fmtBytes(total), hero: true }, ...(verdicts ? [{ label: "Recommended", value: fmtBytes(recommended) }] : []), { label: "Locations", value: sorted.length, hint: viewOnly.length ? `${viewOnly.length} view only` : undefined }, { label: "Selected", value: fmtBytes(bytes) }]} />
       {panel}
-      {status === "stopped" && <div className="mb-3"><Banner tone="amber" icon="stop" title="Scan stopped" actions={<button className="btn btn-sm" onClick={scan.start}>Scan again</button>}>Results so far are shown. Sizes may be incomplete.</Banner></div>}
+      {status === "stopped" && <div className="mb-3"><Banner tone="amber" icon="stop" title="Partial scan" actions={<button className="btn btn-sm" onClick={scan.start}>Scan again</button>}>Results so far are shown. Sizes may be incomplete, so cleaning is turned off until a full scan finishes.</Banner></div>}
       <div className="mb-3 flex items-center justify-between gap-3">
-        <p className="muted text-[13px]">Open a location to choose individual parts, such as single Gradle versions, SDK platforms or simulators.</p>
+        <p className="muted text-[13px]">Open a location to choose individual parts, such as single Gradle versions, SDK platforms or simulators. Versions are checked against your scanned projects.</p>
         <ExpandToggle allOpen={allOpen} onChange={setAllOpen} />
       </div>
 
-      <div className="card min-h-0 flex-1 overflow-auto">
+      <div className="flex min-h-0 flex-1 gap-4">
+      <div className="card min-w-0 flex-1 overflow-auto">
         {categories.map((g) => (
           <div key={g.name}>
             <GroupHeader icon="box" title={g.name} detail={`${g.list.length} location${g.list.length === 1 ? "" : "s"}`} bytes={g.bytes} open={!collapsed.has(g.name)} onToggleOpen={() => setCollapsed((s) => flip(s, g.name))} />
@@ -173,9 +201,11 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
           </div>
         )}
       </div>
+      {focusCache && <Details cache={focusCache} onClose={() => setFocus(null)} />}
+      </div>
 
       <SelectionBar count={plan.length} bytes={bytes} noun="item" permanent={settings.delete_mode === "permanent"}
-        dryRun={settings.dry_run} busy={busy} onClear={() => setSel(new Set())} onClean={clean} blockedReason={scanning ? "Wait for the scan to finish" : undefined} />
+        dryRun={settings.dry_run} busy={busy} onClear={() => setSel(new Set())} onClean={clean} blockedReason={cleanBlocked} />
       {dialogs}
     </div>
   );

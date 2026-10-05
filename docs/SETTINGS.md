@@ -14,7 +14,7 @@ Settings save automatically a moment after you change them. Open the **Settings*
 
 ## Every setting
 
-Settings opens as a list of sections (Appearance, Cleaning, Safety, Scanning, Protection, Rules, Trash) with a one-line summary of each. Click a section to edit it; changes save automatically. Safety is read-only and lists the protections that are always on. In Rules you can search, see each rule's details (folder names, marker files, how it comes back) and add your own with a name, folder names, optional marker files and a description. **About** shows the version and where your data lives.
+Settings opens as a list of sections (Appearance, Cleaning, Recommendations, Safety, Scanning, Protection, Rules, Trash, Diagnostics) with a one-line summary of each. Click a section to edit it; changes save automatically. Safety has a few switches and lists the protections that are always on. In Rules you can search, see each rule's details (folder names, marker files, how it comes back, risk, costs, confidence) and add your own. Diagnostics shows what the last scans and cleanups did. **About** shows the version and where your data lives.
 
 Sections appear in this order in the app.
 
@@ -29,6 +29,24 @@ Sections appear in this order in the app.
 | **When removing** (`delete_mode`) | Move to Trash | Trash keeps a copy you can restore. Permanent frees the space at once and cannot be undone. | Trash for everyday use. Permanent only when the Trash is on a small disk or you need the space immediately. |
 | **Dry run** (`dry_run`) | Off | Runs the whole flow and reports what would be freed, but deletes nothing. A banner in the sidebar reminds you it is on. | On for your first run, after changing rules, or when demoing. Off afterwards. |
 | **Ask before removing** (`confirm_before_delete`) | On | Shows a summary dialog before removing. Items with a red warning always ask, even if this is off. | Keep on. Turn off only if you clean often and trust your protected paths. |
+
+### Recommendations
+| Setting | Default | What it does | Best value |
+| --- | --- | --- | --- |
+| **Show recommendations** (`recommendations_enabled`) | On | Marks every item Recommended, Review or Keep with its reasons, and shows Quick select. | On. |
+| **Quick select default** (`default_cleanup_profile`) | Safe | Which profile is marked as the default in Quick select: `safe`, `recommended` or `deep`. | Safe. Use Deep only after reading the Review items. |
+| **Minimum confidence** (`minimum_recommendation_confidence`) | High | Matches less certain than this are marked Review instead of Recommended. | High. |
+| **Project activity** (`activity_mode`) | Fast | Fast looks at the project's top-level files. Accurate finds the newest file anywhere in the project, skipping build and dependency folders. | Fast. Accurate on monorepos where edits are deep. |
+
+### Safety
+| Setting | Default | What it does | Best value |
+| --- | --- | --- | --- |
+| **Block folders Git tracks** (`protect_git_tracked`) | On | Folders with tracked files cannot be selected. Off turns the block into a red warning. | On. |
+| **Look for keys and secrets** (`detect_sensitive_files`) | On | Checks file names inside candidates. Signing keys block a folder; `.env` and key files add a red warning. | On. |
+| **Warn when a scan is older than** (`stale_scan_minutes`) | 10 minutes | The confirm dialog shows the scan's age past this point. Each item is checked again either way. | 10. |
+| **Require a fresh scan** (`require_rescan_before_cleanup`) | Off | Turns cleaning off once the scan is older than the time above. | On if you leave the app open for long periods. |
+
+The protections that are always on are listed in [Safety](SAFETY.md).
 
 ### Trash
 | Setting | Default | What it does | Best value |
@@ -56,6 +74,13 @@ Note on Trash: on a drive with little free space, Trash does not free anything u
 
 ### Cleanup rules
 Each rule can be switched on or off. A switched-off rule is never matched. The built-in list is in [Rules and locations](RULES.md). Rules for the tools you do not use cost nothing, but turning them off keeps the list focused.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| **Allow dangerous custom rules** (`allow_danger_custom_rules`) | Off | Lets a custom rule be marked Danger. Off, any custom rule saved as Danger or higher is treated as Caution. |
+
+### Diagnostics
+Read only. For the last project scan and tools scan: scan id, whether it finished, folders and files visited, time spent finding and measuring, data examined, unreadable entries, rules used and why folders were skipped (with examples on hover). Also the active and turned-off rules, your scan folders, the data folder, and the last 10 cleanups.
 
 ## Recommended setups by tech stack
 Scan folder: the folder that holds your projects. Everything below is optional tuning.
@@ -157,8 +182,10 @@ Add your own in **Settings → Cleanup rules → Add your own rule**.
 | Name | Shown in the list | Gatsby cache |
 | Folder names | Comma separated names to match | `.cache, public` |
 | Marker files | Optional; the folder only matches when one of these sits next to it | `gatsby-config.js` |
+| Description | Optional | Gatsby's build cache |
+| Risk | Safe or Caution (Danger only with *Allow dangerous custom rules*) | Safe |
 
-Always use a marker file when the folder name is generic (`dist`, `out`, `cache`). Without one, every folder with that name inside your scan folders matches. Custom rules are marked with a **custom** badge and can be deleted again.
+Custom rules are never more than Medium confidence, so their matches are offered as Review rather than Recommended. Always use a marker file when the folder name is generic (`dist`, `out`, `cache`). Without one, every folder with that name inside your scan folders matches. Custom rules are marked with a **custom** badge and can be deleted again.
 
 ## Editing settings.json by hand
-The file is in the data folder listed in the [User guide](USER_GUIDE.md#where-your-data-is-stored). Close the app first. Fields: `scan_roots`, `exclude_names`, `protected_paths`, `rule_enabled`, `custom_rules`, `delete_mode` (`"trash"` or `"permanent"`), `dry_run`, `confirm_before_delete`, `min_size_mb`, `min_age_days`, `max_depth`, `theme` (`"system"`, `"light"`, `"dark"`), `scan_on_launch`, `trash_retention_days`. Missing fields use defaults, so you can delete the file to start over.
+The file is in the data folder listed in the [User guide](USER_GUIDE.md#where-your-data-is-stored). Close the app first. Fields: `scan_roots`, `exclude_names`, `protected_paths`, `rule_enabled`, `custom_rules`, `delete_mode` (`"trash"` or `"permanent"`), `dry_run`, `confirm_before_delete`, `min_size_mb`, `min_age_days`, `max_depth`, `theme` (`"system"`, `"light"`, `"dark"`), `scan_on_launch`, `trash_retention_days`, `recommendations_enabled`, `protect_git_tracked`, `detect_sensitive_files`, `minimum_recommendation_confidence` (`"medium"`, `"high"`, `"very_high"`), `default_cleanup_profile` (`"safe"`, `"recommended"`, `"deep"`), `activity_mode` (`"fast"`, `"accurate"`), `stale_scan_minutes`, `require_rescan_before_cleanup`, `allow_danger_custom_rules`. Custom rule risks are `"safe"`, `"caution"` or `"danger"`; the old `"low"`, `"medium"` and `"high"` still load. Missing fields use defaults, so you can delete the file to start over.
