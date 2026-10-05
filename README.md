@@ -1,36 +1,67 @@
-# Dev Cleaner (desktop)
+<p align="center"><img src="app-icon.svg" width="112" alt="Dev Cleaner icon"></p>
 
-Interactive desktop version of [jemishavasoya/dev-cleaner](https://github.com/jemishavasoya/dev-cleaner).
-Tauri 2 (Rust) backend + React/TypeScript UI. One codebase for macOS, Windows and Linux.
+# Dev Cleaner
 
-## What it does
-- Scans your project folders for rebuildable artifacts: `node_modules`, `.next`, Rust `target`, Flutter `build`/`.dart_tool`, `Pods`, Gradle, Python venvs and caches, .NET `bin`/`obj`, Unity `Library` and more (25 built-in rules). A folder only matches when its project marker exists (e.g. `package.json` for `node_modules`), so unrelated `target` or `build` folders are left alone.
-- Shows size on disk, apparent size, file and folder counts, last modified, project last-active date, git-ignored status, risk level and how to restore each folder.
-- Clear scope: a banner shows which folders are scanned, a "How it works" panel explains every rule, and the confirm dialog lists the exact folders to be removed.
-- Optional parts: folders that are made of independent pieces (Rust `target/debug` vs `release`, Flutter `build/android` vs `ios`, per-version Gradle and Xcode caches, one simulator, one Flutter SDK...) can be expanded and removed one by one.
-- Table (sortable, filterable by ecosystem / size / idle days / git-safe) and treemap views.
-- "Where it looks" dialog listing every scanned folder and every tool location (AppData on Windows, Library on macOS, ~/.cache on Linux), with found / not installed status.
-- Android SDK (ANDROID_HOME, ANDROID_SDK_ROOT or the OS default) split per platform, build-tools, NDK, CMake, emulator image and sources version.
-- Warnings before deleting anything essential: ⚠ Check (not in .gitignore, project changed in the last 3 days, versions other projects may use) and ⛔ Required? (tracked by git, Python env with no requirements file, default Rust toolchain, emulators and Xcode archives). ⛔ items need an extra "I understand" tick.
-- VS Code cache folders (settings and unsaved-file backups are never listed) and view-only Docker / WSL disk images with safe shrink instructions.
-- Global caches tab: npm, Cargo, Gradle, Maven, pub, pip, NuGet, Xcode DerivedData, CocoaPods, Homebrew, Android AVDs, old Claude Code versions.
-- Safe deletion: Trash by default, dry-run mode, confirmation, protected paths, only paths from the last scan can be deleted, never home or root, symlinks refused.
-- Settings: scan folders, excluded names, protected paths, per-rule toggles, custom rules, delete mode, depth, theme.
-- History log with total space reclaimed.
+A desktop app that finds and removes the junk developer tools leave behind: `node_modules`, build output, package caches, SDK downloads, simulators and IDE caches. It runs on Windows, macOS and Linux.
 
-## Setup guides
-Step-by-step: [Windows](docs/WINDOWS_SETUP.md) · [macOS](docs/MACOS_SETUP.md) · [Linux](docs/LINUX_SETUP.md)
+It is the interactive version of [jemishavasoya/dev-cleaner](https://github.com/jemishavasoya/dev-cleaner), built with Tauri 2 (Rust) and React.
 
-## Develop
+**Safe by default.** Nothing is deleted until you tick it and confirm. Removed folders go to the Trash, a dry-run mode lets you rehearse, and the app warns you before you touch anything a project may still need. See [Safety](docs/SAFETY.md).
+
+## What you get
+
+| Tab | What it does |
+| --- | --- |
+| **Projects** | Scans your code folders and lists every rebuildable folder with size, file count, age, git status and warnings. Folders made of independent pieces expand into sub-items you can remove one by one. |
+| **Tool caches** | Measures caches and SDKs in your user folder (npm, Cargo, Gradle, Android SDK, Xcode, JetBrains, VS Code caches and more). Docker and WSL disks are shown view-only. |
+| **History** | Every cleanup, with the total space reclaimed. |
+| **Settings** | Scan folders, protected paths, rules, delete mode, dry run, depth, filters and theme. |
+
+Both scanning tabs show clear states: ready to scan, scanning with live progress, results, nothing found, stopped, and error.
+
+## Quick start for users
+
+1. Install the app, or run it from source (see the setup guide for your system below).
+2. Open **Settings** and add the folder that holds your projects, for example `C:\development` or `~/code`.
+3. Go to **Projects** and press **Scan now**.
+4. Tick what you want gone. Use the arrow on a row to pick only some parts.
+5. Press **Clean selected** and confirm.
+
+Tip: turn on **Dry run** in Settings for your first try. It reports what would be freed without touching anything.
+
+Full walkthrough: [User guide](docs/USER_GUIDE.md).
+
+## Documentation
+
+| Guide | For | Contents |
+| --- | --- | --- |
+| [User guide](docs/USER_GUIDE.md) | Everyone | Screens, states, scanning, cleaning, sub-items, warnings, history |
+| [Settings reference](docs/SETTINGS.md) | Everyone | Every setting, plus recommended setups per tech stack and per operating system |
+| [Rules and locations](docs/RULES.md) | Everyone | Every project rule and tool cache, what it removes and how it comes back |
+| [Safety, FAQ and troubleshooting](docs/SAFETY.md) | Everyone | How deletion is protected, what warnings mean, common problems |
+| [Developer guide](docs/DEVELOPMENT.md) | Contributors | Setup, run, architecture, adding rules, tests, releases, icon |
+| [Windows setup](docs/WINDOWS_SETUP.md) | Running from source | Step by step, including the PowerShell script policy fix |
+| [macOS setup](docs/MACOS_SETUP.md) | Running from source | Step by step |
+| [Linux setup](docs/LINUX_SETUP.md) | Running from source | Step by step per distribution |
+
+## Quick start for developers
+
 ```bash
 npm install
-npm run tauri dev        # run the app
+npm run tauri dev          # desktop app with hot reload
+npm run dev                # UI only in a browser (no backend)
 cargo test -p dev_cleaner_core
-npm run tauri build      # installers
+npm run tauri build        # installers
 ```
-Linux needs the Tauri prerequisites (`libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `librsvg2-dev`, `libxdo-dev`).
 
-## Layout
-- `core/` pure Rust library (rules, scanner, cleaner, settings, history, global caches) with tests
-- `src-tauri/` Tauri commands wrapping the core
-- `src/` React UI
+You need Rust, Node.js 20+ and the Tauri system prerequisites. The OS guides above list them. More in the [Developer guide](docs/DEVELOPMENT.md).
+
+## Project layout
+
+```
+core/        Rust library: rules, scanner, cleaner, global caches, settings, history (with tests)
+src-tauri/   Tauri shell: commands and events that wrap the core
+src/         React UI: views, components, hooks
+docs/        Guides
+app-icon.svg Source of the app icon (see the Developer guide to regenerate)
+```
