@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { api, type GlobalCache, type GlobalProgress, type GlobalSummary, type Item, type ScanProgress, type ScanSummary } from "../api";
 
@@ -24,7 +24,9 @@ function useBatcher<T>(key: (t: T) => string, setList: React.Dispatch<React.SetS
     if (!raf.current) raf.current = requestAnimationFrame(flush);
   }, [flush]);
   const clear = useCallback(() => { buf.current = []; }, []);
-  return { push, clear, flush };
+  // Stable identity: the event listeners below depend on it, and re-subscribing on every render
+  // opens a window where scan-done can be missed (the scan then looks stuck).
+  return useMemo(() => ({ push, clear, flush }), [push, clear, flush]);
 }
 
 export function useScan() {
@@ -56,7 +58,7 @@ export function useScan() {
     setStartedAt(Date.now());
     setStatus("scanning");
     try { await api.startScan(); } catch (e) { setError(String(e)); setStatus("error"); }
-  }, []);
+  }, [batch]);
   const stop = useCallback(() => { api.cancelScan(); }, []);
   const refresh = useCallback(() => api.getItems().then(setItems), []);
   return { status, items, progress, summary, error, startedAt, start, stop, refresh };
@@ -90,7 +92,7 @@ export function useGlobalScan() {
     setStartedAt(Date.now());
     setStatus("scanning");
     try { await api.startGlobalScan(); } catch (e) { setError(String(e)); setStatus("error"); }
-  }, []);
+  }, [batch]);
   const stop = useCallback(() => { api.cancelGlobalScan(); }, []);
   return { status, caches, setCaches, progress, summary, error, startedAt, start, stop };
 }
