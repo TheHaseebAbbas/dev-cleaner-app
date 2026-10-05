@@ -20,9 +20,28 @@ Folders that a running program uses (a dev server, a Gradle daemon, an emulator,
 
 Both scanning pages show clear states: ready to scan, scanning with live progress, results, nothing found, stopped, and error.
 
+## Download
+
+Get the latest version from the [Releases page](https://github.com/TheHaseebAbbas/dev-cleaner-app/releases/latest).
+
+| System | File |
+| --- | --- |
+| Windows, no install | `dev-cleaner-<version>-windows-x64-portable.exe` (a single file you double-click) |
+| Windows installer | `dev-cleaner-<version>-windows-x64-setup.exe` or `.msi` |
+| macOS (Apple Silicon and Intel) | `dev-cleaner-<version>-macos-universal.dmg` |
+| Linux | `.AppImage` (no install), `.deb` or `.rpm` |
+
+### How to open it
+
+The builds are not code-signed yet, so your system warns the first time you open them. This is expected.
+
+- **Windows:** if SmartScreen says "Windows protected your PC", click **More info**, then **Run anyway**. The portable `.exe` needs the Microsoft Edge WebView2 runtime, which Windows 10 and 11 already include.
+- **macOS:** right-click Dev Cleaner in Applications and choose **Open**, then **Open** again. On macOS 15 or later, try to open it once, then go to **System Settings → Privacy & Security** and click **Open Anyway**. Or run `xattr -cr "/Applications/Dev Cleaner.app"` in Terminal once.
+- **Linux (AppImage):** run `chmod +x dev-cleaner-*.AppImage`, then double-click it or start it from a terminal. On Ubuntu 22.04 and later, install `libfuse2` first if it does not start.
+
 ## Quick start for users
 
-1. Install the app, or run it from source (see the setup guide for your system below).
+1. [Download](#download) and open the app, or run it from source (see the setup guide for your system below).
 2. On first launch, choose the folder that holds your projects, for example `C:\development` or `~/code`. You can change it later in **Settings → Scanning**.
 3. Go to **Projects** and press **Scan projects**.
 4. Tick what you want gone, or use **Quick select → Safe**. Use the arrow on a row to pick only some parts.
@@ -59,7 +78,7 @@ npm run tauri build        # installers
 
 You need Rust, Node.js 20+ and the Tauri system prerequisites. The OS guides above list them.
 
-More in the [Developer guide](docs/DEVELOPMENT.md): [building installers](docs/DEVELOPMENT.md#building-releases) per OS, [signing and CI](docs/DEVELOPMENT.md#signing-needed-for-public-releases), [changing the app icon](docs/DEVELOPMENT.md#the-app-icon) (and making it show up), the [everyday workflow](docs/DEVELOPMENT.md#everyday-development-workflow) and [common development problems](docs/DEVELOPMENT.md#common-development-problems).
+More in the [Developer guide](docs/DEVELOPMENT.md): [building installers](docs/DEVELOPMENT.md#building-releases) per OS, [signing](docs/DEVELOPMENT.md#signing), [publishing a release](docs/DEVELOPMENT.md#publishing-a-release-github-actions), [changing the app icon](docs/DEVELOPMENT.md#the-app-icon) (and making it show up), the [everyday workflow](docs/DEVELOPMENT.md#everyday-development-workflow) and [common development problems](docs/DEVELOPMENT.md#common-development-problems).
 
 ## Project layout
 
