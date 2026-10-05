@@ -54,8 +54,7 @@ export default function App() {
 
   const onDeleted = useCallback((out: DeleteOutcome[]) => {
     if (out[0]?.dry_run) return;
-    const gone = new Set(out.filter((o) => o.ok).map((o) => o.path));
-    setItems((prev) => prev.filter((i) => !gone.has(i.path)));
+    api.getItems().then(setItems);
     api.diskSpace().then(setDisk);
   }, []);
 
@@ -75,7 +74,7 @@ export default function App() {
         </div>
       </nav>
       <main className="min-w-0 flex-1 p-4">
-        {tab === "projects" && <Artifacts items={items} scanning={scanning} settings={settings} onScan={scan} onCancel={() => api.cancelScan()} onDeleted={onDeleted} />}
+        {tab === "projects" && <Artifacts items={items} scanning={scanning} settings={settings} onScan={scan} onCancel={() => api.cancelScan()} onDeleted={onDeleted} onOpenSettings={() => setTab("settings")} />}
         {tab === "global" && <Global settings={settings} />}
         {tab === "history" && <History />}
         {tab === "settings" && <SettingsView settings={settings} onChange={updateSettings} />}

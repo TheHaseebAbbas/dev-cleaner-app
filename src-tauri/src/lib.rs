@@ -20,6 +20,7 @@ struct AppState {
     items: Mutex<Vec<Item>>,
     cancel: Arc<AtomicBool>,
     scanning: Arc<AtomicBool>,
+    globals: Mutex<Vec<GlobalCache>>,
 }
 
 fn settings_path(app: &AppHandle) -> Result<PathBuf, String> {
@@ -79,45 +80,85 @@ fn cancel_scan(state: State<'_, AppState>) {
     state.cancel.store(true, Ordering::SeqCst);
 }
 
-/// Deletes only paths that came out of the last scan and are not protected.
+fn refused(path: &str, why: &str, dry_run: bool) -> DeleteOutcome {
+    DeleteOutcome { path: path.into(), ok: false, bytes_freed: 0, error: Some(why.into()), dry_run }
+}
+
+#[tauri::command]
+fn get_items(state: State<'_, AppState>) -> Vec<Item> {
+    state.items.lock().unwrap().clone()
+}
+
+/// Deletes only artifact folders (or their parts) that came out of the last scan and are not
+/// protected. If a folder and one of its parts are both listed, only the folder is deleted.
 #[tauri::command]
 fn delete_items(app: AppHandle, state: State<'_, AppState>, paths: Vec<String>) -> Result<Vec<DeleteOutcome>, String> {
     let settings = Settings::load(&settings_path(&app)?);
     let known: Vec<Item> = state.items.lock().unwrap().clone();
     let mut outcomes = vec![];
     for p in &paths {
-        let ok_item = known.iter().find(|i| &i.path == p);
-        let outcome = match ok_item {
-            None => DeleteOutcome { path: p.clone(), ok: false, bytes_freed: 0, error: Some("not part of the last scan".into()), dry_run: settings.dry_run },
-            Some(i) if i.protected || settings.is_protected(std::path::Path::new(p)) => DeleteOutcome { path: p.clone(), ok: false, bytes_freed: 0, error: Some("path is protected".into()), dry_run: settings.dry_run },
+        let owner = known.iter().find(|i| &i.path == p || i.parts.iter().any(|x| &x.path == p));
+        let outcome = match owner {
+            None => refused(p, "not part of the last scan", settings.dry_run),
+            Some(i) if i.protected || settings.is_protected(std::path::Path::new(p)) => refused(p, "path is protected", settings.dry_run),
+            Some(i) if &i.path != p && paths.contains(&i.path) => continue,
             Some(_) => cleaner::delete_one(std::path::Path::new(p), settings.delete_mode, settings.dry_run),
         };
         outcomes.push(outcome);
     }
     history::record(&history_path(&app)?, &outcomes, settings.delete_mode).map_err(|e| e.to_string())?;
     if !settings.dry_run {
-        let gone: Vec<&String> = outcomes.iter().filter(|o| o.ok).map(|o| &o.path).collect();
-        state.items.lock().unwrap().retain(|i| !gone.contains(&&i.path));
+        let gone: Vec<String> = outcomes.iter().filter(|o| o.ok).map(|o| o.path.clone()).collect();
+        let mut items = state.items.lock().unwrap();
+        items.retain(|i| !gone.contains(&i.path));
+        for i in items.iter_mut() {
+            let removed: Vec<_> = i.parts.iter().filter(|x| gone.contains(&x.path)).cloned().collect();
+            if removed.is_empty() {
+                continue;
+            }
+            i.parts.retain(|x| !gone.contains(&x.path));
+            for r in &removed {
+                i.disk_bytes = i.disk_bytes.saturating_sub(r.disk_bytes);
+                i.apparent_bytes = i.apparent_bytes.saturating_sub(r.apparent_bytes);
+                i.file_count = i.file_count.saturating_sub(r.file_count);
+            }
+            if i.parts.len() < 2 {
+                i.parts.clear();
+            }
+        }
     }
     Ok(outcomes)
 }
 
 #[tauri::command]
-async fn list_global_caches() -> Vec<GlobalCache> {
-    tauri::async_runtime::spawn_blocking(global::list_global_caches).await.unwrap_or_default()
+async fn list_global_caches(state: State<'_, AppState>) -> Result<Vec<GlobalCache>, String> {
+    let list = tauri::async_runtime::spawn_blocking(global::list_global_caches)
+        .await
+        .map_err(|e| e.to_string())?;
+    *state.globals.lock().unwrap() = list.clone();
+    Ok(list)
 }
 
+/// `ids` delete whole caches; `part_paths` delete single sub-folders of a known cache.
 #[tauri::command]
-fn delete_global_caches(app: AppHandle, ids: Vec<String>) -> Result<Vec<DeleteOutcome>, String> {
+fn delete_global_caches(app: AppHandle, state: State<'_, AppState>, ids: Vec<String>, part_paths: Vec<String>) -> Result<Vec<DeleteOutcome>, String> {
     let settings = Settings::load(&settings_path(&app)?);
-    let known = global::list_global_caches();
-    let outcomes: Vec<DeleteOutcome> = ids
-        .iter()
-        .map(|id| match known.iter().find(|c| &c.id == id && c.exists) {
+    let known = state.globals.lock().unwrap().clone();
+    let mut outcomes: Vec<DeleteOutcome> = vec![];
+    for id in &ids {
+        outcomes.push(match known.iter().find(|c| &c.id == id && c.exists) {
             Some(c) => cleaner::delete_one(std::path::Path::new(&c.path), settings.delete_mode, settings.dry_run),
-            None => DeleteOutcome { path: id.clone(), ok: false, bytes_freed: 0, error: Some("unknown or missing cache".into()), dry_run: settings.dry_run },
-        })
-        .collect();
+            None => refused(id, "unknown or missing cache", settings.dry_run),
+        });
+    }
+    for p in &part_paths {
+        let owner = known.iter().find(|c| c.parts.iter().any(|x| &x.path == p));
+        outcomes.push(match owner {
+            Some(c) if ids.contains(&c.id) => continue,
+            Some(_) => cleaner::delete_one(std::path::Path::new(p), settings.delete_mode, settings.dry_run),
+            None => refused(p, "not a known cache part", settings.dry_run),
+        });
+    }
     history::record(&history_path(&app)?, &outcomes, settings.delete_mode).map_err(|e| e.to_string())?;
     Ok(outcomes)
 }
@@ -164,7 +205,7 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             get_settings, save_settings, list_rules, start_scan, cancel_scan, delete_items,
-            list_global_caches, delete_global_caches, get_history, reveal_path, disk_space
+            get_items, list_global_caches, delete_global_caches, get_history, reveal_path, disk_space
         ])
         .run(tauri::generate_context!())
         .expect("error while running Dev Cleaner");

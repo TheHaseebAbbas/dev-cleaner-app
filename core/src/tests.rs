@@ -96,3 +96,40 @@ fn delete_refuses_unsafe_targets() {
         assert!(cleaner::check_target(&link).is_err());
     }
 }
+
+#[test]
+fn split_rules_expose_independent_parts() {
+    let t = tempfile::tempdir().unwrap();
+    let r = t.path();
+    write(&r.join("rs/Cargo.toml"), 10);
+    write(&r.join("rs/target/debug/a"), 3000);
+    write(&r.join("rs/target/release/b"), 1000);
+    write(&r.join("rs/target/CACHEDIR.TAG"), 5);
+    write(&r.join("web/package.json"), 10);
+    write(&r.join("web/node_modules/a/x.js"), 100);
+    write(&r.join("web/node_modules/b/y.js"), 100);
+
+    let items = scan(&opts(r), &AtomicBool::new(false), |_| {});
+    let target = items.iter().find(|i| i.rule_id == "rust-target").unwrap();
+    assert_eq!(target.parts.len(), 2);
+    assert_eq!(target.parts[0].name, "debug"); // largest first
+    assert_eq!(target.parts[1].name, "release");
+    assert!(target.parts.iter().all(|p| p.path.starts_with(&target.path)));
+    assert!(target.description.contains("Cargo"));
+    // node_modules is not split
+    let nm = items.iter().find(|i| i.rule_id == "node_modules").unwrap();
+    assert!(nm.parts.is_empty());
+
+    // a part can be deleted on its own and the sibling survives
+    let out = cleaner::delete_one(std::path::Path::new(&target.parts[0].path), DeleteMode::Permanent, false);
+    assert!(out.ok);
+    assert!(!r.join("rs/target/debug").exists());
+    assert!(r.join("rs/target/release/b").exists());
+}
+
+#[test]
+fn every_builtin_rule_has_a_description() {
+    for r in builtin_rules() {
+        assert!(!r.description.is_empty(), "{} has no description", r.id);
+    }
+}

@@ -3,6 +3,15 @@ import { invoke } from "@tauri-apps/api/core";
 export type Risk = "low" | "medium" | "high";
 export type DeleteMode = "trash" | "permanent";
 
+export interface Part {
+  path: string;
+  name: string;
+  disk_bytes: number;
+  apparent_bytes: number;
+  file_count: number;
+  last_modified: number;
+}
+
 export interface Item {
   path: string;
   rule_id: string;
@@ -17,6 +26,8 @@ export interface Item {
   last_modified: number;
   project_last_modified: number;
   regenerates_with: string;
+  description: string;
+  parts: Part[];
   risk: Risk;
   git_ignored: boolean | null;
   protected: boolean;
@@ -30,6 +41,8 @@ export interface Rule {
   parent_markers: string[];
   self_markers: string[];
   regenerates_with: string;
+  description: string;
+  split: boolean;
   risk: Risk;
   enabled: boolean;
   custom: boolean;
@@ -59,6 +72,7 @@ export interface GlobalCache {
   disk_bytes: number;
   file_count: number;
   note: string;
+  parts: Part[];
 }
 
 export interface DeleteOutcome {
@@ -84,7 +98,9 @@ export const api = {
   cancelScan: () => invoke<void>("cancel_scan"),
   deleteItems: (paths: string[]) => invoke<DeleteOutcome[]>("delete_items", { paths }),
   listGlobalCaches: () => invoke<GlobalCache[]>("list_global_caches"),
-  deleteGlobalCaches: (ids: string[]) => invoke<DeleteOutcome[]>("delete_global_caches", { ids }),
+  getItems: () => invoke<Item[]>("get_items"),
+  deleteGlobalCaches: (ids: string[], partPaths: string[]) =>
+    invoke<DeleteOutcome[]>("delete_global_caches", { ids, partPaths }),
   getHistory: () => invoke<HistoryEntry[]>("get_history"),
   revealPath: (path: string) => invoke<void>("reveal_path", { path }),
   diskSpace: () => invoke<[number, number] | null>("disk_space"),

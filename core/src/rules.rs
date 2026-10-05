@@ -29,6 +29,12 @@ pub struct Rule {
     pub self_markers: Vec<String>,
     /// How the directory comes back, shown in the details panel.
     pub regenerates_with: String,
+    /// Plain-language explanation of what the folder contains.
+    #[serde(default)]
+    pub description: String,
+    /// When true, each direct child folder is offered as an independent, optional part.
+    #[serde(default)]
+    pub split: bool,
     pub risk: Risk,
     #[serde(default = "yes")]
     pub enabled: bool,
@@ -59,6 +65,8 @@ fn rule(
         parent_markers: v(parent),
         self_markers: v(selfm),
         regenerates_with: regen.into(),
+        description: String::new(),
+        split: false,
         risk,
         enabled: true,
         custom: false,
@@ -68,9 +76,47 @@ fn rule(
 const GRADLE: &[&str] = &["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"];
 const DOTNET: &[&str] = &["*.csproj", "*.fsproj", "*.vbproj"];
 
+/// What each built-in folder is, and which ones are split into optional parts.
+fn describe(r: &mut Rule) {
+    let (desc, split) = match r.id.as_str() {
+        "node_modules" => ("Installed npm/yarn/pnpm packages for this project. Your source code and package.json are not touched.", false),
+        "next" => ("Next.js build output. `cache` holds incremental build data; `server` and `static` are the compiled site.", true),
+        "nuxt" => ("Nuxt build output and generated files.", false),
+        "js-caches" => ("Build-tool caches (Turborepo, Parcel, Vite, SvelteKit, Angular). Rebuilt automatically.", false),
+        "flutter-build" => ("Flutter build output. Each platform (android, ios, web, ...) is built separately and can be removed on its own.", true),
+        "dart-tool" => ("Dart tooling metadata and package config for this project.", false),
+        "fvm" => ("Flutter SDK version pinned for this project by FVM.", false),
+        "pods" => ("CocoaPods dependencies for the iOS/macOS part of this project.", false),
+        "gradle-project" => ("Gradle's per-project cache and task state.", false),
+        "gradle-build" => ("Android/Java compiled output. Independent from your source code.", false),
+        "rust-target" => ("Cargo build output. `debug` and `release` (and cross-compile targets) are separate and can be removed on their own.", true),
+        "maven-target" => ("Maven compiled classes and packaged artifacts.", false),
+        "python-venv" => ("A Python virtual environment with its installed packages.", false),
+        "python-cache" => ("Bytecode and test/lint tool caches. Rebuilt on the next run.", false),
+        "dotnet-bin-obj" => (".NET compiled binaries and intermediate files.", false),
+        "visual-studio" => ("Visual Studio per-solution settings and caches.", false),
+        "swift-build" => ("Swift Package Manager build output.", false),
+        "elixir-build" => ("Elixir compiled code per environment (dev, test, prod) and fetched dependencies.", true),
+        "zig-cache" => ("Zig compiler cache and build output.", false),
+        "haskell" => ("Haskell (Stack/Cabal) build output.", false),
+        "terraform" => ("Downloaded Terraform providers and modules for this project.", true),
+        "unity-library" => ("Unity's imported-asset cache. Unity rebuilds it when the project is reopened (can take a while).", true),
+        "go-vendor" => ("Vendored Go dependencies.", false),
+        "php-vendor" => ("Composer dependencies.", false),
+        "ruby-bundle" => ("Bundler install directory for this project.", false),
+        _ => ("", false),
+    };
+    if r.description.is_empty() {
+        r.description = desc.into();
+    }
+    if !r.custom {
+        r.split = split;
+    }
+}
+
 pub fn builtin_rules() -> Vec<Rule> {
     use Risk::*;
-    vec![
+    let mut rules = vec![
         rule("node_modules", "node_modules", "Node.js", &["node_modules"], &["package.json"], &[], "npm/yarn/pnpm install", Medium),
         rule("next", ".next build", "Node.js", &[".next"], &["package.json"], &[], "next build / next dev", Low),
         rule("nuxt", ".nuxt / .output", "Node.js", &[".nuxt", ".output"], &["package.json"], &[], "nuxt build / dev", Low),
@@ -96,7 +142,9 @@ pub fn builtin_rules() -> Vec<Rule> {
         rule("go-vendor", "Go vendor", "Go", &["vendor"], &["go.mod"], &[], "go mod vendor", Medium),
         rule("php-vendor", "Composer vendor", "PHP", &["vendor"], &["composer.json"], &[], "composer install", Medium),
         rule("ruby-bundle", "Bundler vendor/bundle", "Ruby", &[".bundle"], &["Gemfile"], &[], "bundle install", Medium),
-    ]
+    ];
+    rules.iter_mut().for_each(describe);
+    rules
 }
 
 /// Match `*.ext` style or exact names against a directory listing.

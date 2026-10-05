@@ -20,6 +20,17 @@ pub struct ScanOptions {
     pub max_depth: usize,
 }
 
+/// An independently deletable direct child of an artifact folder (e.g. `target/debug`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Part {
+    pub path: String,
+    pub name: String,
+    pub disk_bytes: u64,
+    pub apparent_bytes: u64,
+    pub file_count: u64,
+    pub last_modified: u64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Item {
     /// Absolute path of the artifact directory; also its identifier.
@@ -40,6 +51,9 @@ pub struct Item {
     /// Newest modification time among the project's own files, excluding artifacts (unix seconds).
     pub project_last_modified: u64,
     pub regenerates_with: String,
+    pub description: String,
+    /// Independent sub-folders; empty unless the rule splits and there are at least two.
+    pub parts: Vec<Part>,
     pub risk: Risk,
     /// `Some(true)` if git ignores it, `Some(false)` if tracked/not ignored, `None` if not a git repo.
     pub git_ignored: Option<bool>,
@@ -73,21 +87,62 @@ fn disk_len(md: &std::fs::Metadata) -> u64 {
     md.len()
 }
 
+fn add(s: &mut DirStats, md: &std::fs::Metadata) {
+    s.newest = s.newest.max(mtime_secs(md));
+    if md.is_dir() {
+        s.dirs += 1;
+    } else {
+        s.files += 1;
+        s.apparent_bytes += md.len();
+        s.disk_bytes += disk_len(md);
+    }
+}
+
 /// Measure a directory tree without following symlinks.
 pub fn dir_stats(path: &Path) -> DirStats {
     let mut s = DirStats::default();
     for e in WalkDir::new(path).follow_links(false).into_iter().flatten() {
-        let Ok(md) = e.metadata() else { continue };
-        s.newest = s.newest.max(mtime_secs(&md));
-        if md.is_dir() {
-            s.dirs += 1;
-        } else {
-            s.files += 1;
-            s.apparent_bytes += md.len();
-            s.disk_bytes += disk_len(&md);
+        if let Ok(md) = e.metadata() {
+            add(&mut s, &md);
         }
     }
     s
+}
+
+/// Like [`dir_stats`], and also measures every direct child *directory* separately.
+/// Returns no parts unless there are at least two.
+pub fn dir_stats_parts(path: &Path) -> (DirStats, Vec<Part>) {
+    use std::collections::BTreeMap;
+    let mut total = DirStats::default();
+    let mut kids: BTreeMap<std::ffi::OsString, (bool, DirStats)> = BTreeMap::new();
+    for e in WalkDir::new(path).follow_links(false).into_iter().flatten() {
+        let Ok(md) = e.metadata() else { continue };
+        add(&mut total, &md);
+        let Ok(rel) = e.path().strip_prefix(path) else { continue };
+        let Some(first) = rel.components().next() else { continue };
+        let entry = kids.entry(first.as_os_str().to_owned()).or_default();
+        if e.depth() == 1 {
+            entry.0 = md.is_dir();
+        }
+        add(&mut entry.1, &md);
+    }
+    let mut parts: Vec<Part> = kids
+        .into_iter()
+        .filter(|(_, (is_dir, _))| *is_dir)
+        .map(|(name, (_, st))| Part {
+            path: path.join(&name).to_string_lossy().into_owned(),
+            name: name.to_string_lossy().into_owned(),
+            disk_bytes: st.disk_bytes,
+            apparent_bytes: st.apparent_bytes,
+            file_count: st.files,
+            last_modified: st.newest,
+        })
+        .collect();
+    if parts.len() < 2 {
+        parts.clear();
+    }
+    parts.sort_by(|a, b| b.disk_bytes.cmp(&a.disk_bytes));
+    (total, parts)
 }
 
 /// Newest mtime among the project's top-level entries, ignoring the artifact dirs themselves.
@@ -177,7 +232,11 @@ where
                 return None;
             }
             let project = path.parent().unwrap_or(path);
-            let st = dir_stats(path);
+            let (st, parts) = if rule.split {
+                dir_stats_parts(path)
+            } else {
+                (dir_stats(path), vec![])
+            };
             let item = Item {
                 path: path.to_string_lossy().into_owned(),
                 rule_id: rule.id.clone(),
@@ -195,6 +254,8 @@ where
                 last_modified: st.newest,
                 project_last_modified: project_mtime(project, &opts.rules),
                 regenerates_with: rule.regenerates_with.clone(),
+                description: rule.description.clone(),
+                parts,
                 risk: rule.risk,
                 git_ignored: git_ignored(project, path),
                 protected: opts.protected_paths.iter().any(|p| path.starts_with(p)),

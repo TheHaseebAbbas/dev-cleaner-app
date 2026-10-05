@@ -3,7 +3,7 @@ import { api, ageDays, fmtBytes, fmtDate, type Item } from "../api";
 function Row({ k, v }: { k: string; v: React.ReactNode }) {
   return (
     <div className="flex justify-between gap-4 border-b border-slate-100 py-1.5 text-sm dark:border-slate-800">
-      <span className="text-slate-500">{k}</span>
+      <span className="shrink-0 text-slate-500">{k}</span>
       <span className="break-all text-right">{v}</span>
     </div>
   );
@@ -16,19 +16,25 @@ export function Details({ item, onClose }: { item: Item; onClose: () => void }) 
         <h3 className="font-semibold">{item.project_name}</h3>
         <button className="btn !px-2 !py-0.5" onClick={onClose}>✕</button>
       </div>
-      <Row k="Artifact" v={item.rule_name} />
-      <Row k="Ecosystem" v={item.ecosystem} />
+      <p className="mb-2 rounded bg-slate-100 p-2 text-sm dark:bg-slate-800">{item.description || item.rule_name}</p>
+      <div className="mb-2 rounded border border-red-200 bg-red-50 p-2 text-xs dark:border-red-900 dark:bg-red-950/40">
+        <b>Cleaning removes only this folder:</b>
+        <div className="mt-1 break-all font-mono">{item.path}</div>
+        <div className="mt-1 text-slate-600 dark:text-slate-300">Everything else in <span className="font-mono">{item.project_path}</span> stays.</div>
+      </div>
+      <Row k="Type" v={`${item.rule_name} (${item.ecosystem})`} />
       <Row k="Size on disk" v={fmtBytes(item.disk_bytes)} />
       <Row k="Apparent size" v={fmtBytes(item.apparent_bytes)} />
-      <Row k="Files" v={item.file_count.toLocaleString()} />
-      <Row k="Folders" v={item.dir_count.toLocaleString()} />
-      <Row k="Artifact modified" v={`${fmtDate(item.last_modified)}`} />
+      <Row k="Files / folders" v={`${item.file_count.toLocaleString()} / ${item.dir_count.toLocaleString()}`} />
+      <Row k="Folder modified" v={fmtDate(item.last_modified)} />
       <Row k="Project last active" v={`${fmtDate(item.project_last_modified)} (${ageDays(item.project_last_modified)}d ago)`} />
       <Row k="Risk" v={item.risk} />
       <Row k="Git" v={item.git_ignored === null ? "not a git repo" : item.git_ignored ? "ignored (safe)" : "NOT ignored"} />
       <Row k="Restore with" v={item.regenerates_with} />
       <Row k="Protected" v={item.protected ? "yes" : "no"} />
-      <div className="mt-2 break-all text-xs text-slate-500">{item.path}</div>
+      {item.parts.length > 0 && (
+        <div className="mt-2 text-xs text-slate-500">Contains {item.parts.length} independent parts. Expand the row in the list to remove them one by one.</div>
+      )}
       <button className="btn mt-3 w-full justify-center" onClick={() => api.revealPath(item.path)}>
         Reveal in file manager
       </button>

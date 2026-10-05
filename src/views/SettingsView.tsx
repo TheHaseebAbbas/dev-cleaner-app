@@ -41,7 +41,7 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
     const rule: Rule = {
       id: `custom-${Date.now()}`, name: draft.name.trim(), ecosystem: "Custom", dir_names: dirs,
       parent_markers: draft.markers.split(",").map((x) => x.trim()).filter(Boolean), self_markers: [],
-      regenerates_with: "user-defined", risk: "medium", enabled: true, custom: true,
+      regenerates_with: "user-defined", description: "Custom rule you added.", split: false, risk: "medium", enabled: true, custom: true,
     };
     set("custom_rules", [...s.custom_rules, rule]);
     setDraft({ name: "", dirs: "", markers: "" });
@@ -87,7 +87,7 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
             {rules.map((r) => (
               <tr key={r.id} className="border-b border-slate-100 dark:border-slate-800">
                 <td className="w-8 py-1.5"><input type="checkbox" checked={r.enabled} onChange={(e) => set("rule_enabled", { ...s.rule_enabled, [r.id]: e.target.checked })} /></td>
-                <td className="py-1.5"><span className="font-medium">{r.name}</span> <span className="text-xs text-slate-500">{r.ecosystem} · {r.dir_names.join(", ")}{r.parent_markers.length ? ` (needs ${r.parent_markers.join(" or ")})` : ""}</span></td>
+                <td className="py-1.5"><span className="font-medium">{r.name}</span> <span className="text-xs text-slate-500">{r.ecosystem} · folder {r.dir_names.join(", ")}{r.parent_markers.length ? ` next to ${r.parent_markers.join(" or ")}` : ""}{r.split ? " · removable in parts" : ""}</span>{r.description && <div className="text-xs text-slate-500">{r.description}</div>}</td>
                 <td className="py-1.5 text-right">
                   {r.custom && <button className="text-red-600" onClick={() => set("custom_rules", s.custom_rules.filter((c) => c.id !== r.id))}>delete</button>}
                 </td>
