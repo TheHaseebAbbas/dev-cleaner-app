@@ -12,7 +12,8 @@
 7. [Working on the UI without the desktop shell](#working-on-the-ui-without-the-desktop-shell)
 8. [Building releases](#building-releases)
 9. [The app icon](#the-app-icon)
-10. [Conventions](#conventions)
+10. [Everyday development workflow](#everyday-development-workflow)
+11. [Conventions](#conventions)
 
 ## Prerequisites
 | Tool | Version | Notes |
@@ -131,27 +132,144 @@ Run all three before opening a pull request. Core tests use temporary directorie
 `npm run dev` opens the UI in a browser, but there is no Tauri backend, so every `invoke` fails. To explore states, mock `window.__TAURI_INTERNALS__.invoke` (and `__TAURI_EVENT_PLUGIN_INTERNALS__.unregisterListener`) with Playwright's `addInitScript`, answering `get_settings`, `start_scan` (then emit `scan-item`, `scan-progress`, `scan-done` through the registered event handlers) and so on. This is how the UI states were checked.
 
 ## Building releases
+
+### Build the installer for your OS
 ```bash
+npm install
 npm run tauri build
 ```
-Outputs are in `target/release/bundle/` (the Cargo workspace puts `target/` at the repository root):
+This type-checks and bundles the UI, compiles Rust in release mode, and packages installers. The first build takes several minutes. Tauri cannot cross-compile bundles, so build each OS on that OS (or in CI with one runner per OS).
 
-| OS | Output |
-| --- | --- |
-| Windows | `.msi` and `.exe` (NSIS) installers |
-| macOS | `.app` and `.dmg` |
-| Linux | `.deb`, `.rpm` and `.AppImage` |
+Outputs (the Cargo workspace puts `target/` at the repository root):
 
-Build on each target OS (Tauri does not cross-compile bundles). Bump `version` in `package.json`, `src-tauri/tauri.conf.json` and `src-tauri/Cargo.toml` together. Code signing and notarization (macOS) or signing certificates (Windows) are needed to avoid OS warnings for public releases; see the Tauri distribution docs.
+| OS | Location | Files |
+| --- | --- | --- |
+| Windows | `target/release/bundle/msi/` and `target/release/bundle/nsis/` | `.msi` and `-setup.exe` installers |
+| macOS | `target/release/bundle/dmg/` and `target/release/bundle/macos/` | `.dmg` and `Dev Cleaner.app` |
+| Linux | `target/release/bundle/deb/`, `rpm/`, `appimage/` | `.deb`, `.rpm`, `.AppImage` |
+
+The bare executable is also at `target/release/dev-cleaner-app` (`.exe` on Windows). It runs without installing, but needs WebView2 (Windows) or WebKitGTK (Linux) on the machine.
+
+Build only one format, for example `npm run tauri build -- --bundles nsis` (Windows), `-- --bundles dmg` (macOS) or `-- --bundles appimage` (Linux). Build without bundling: `npm run tauri build -- --no-bundle`.
+
+Debug build with the dev tools open, closer to production than `tauri dev`: `npm run tauri build -- --debug`.
+
+### Versioning
+Bump `version` in all three places together: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` (and `core/Cargo.toml`). Then tag the commit, for example `git tag v0.2.0 && git push --tags`.
+
+### Signing (needed for public releases)
+Unsigned installers work but show OS warnings.
+- **Windows:** SmartScreen warns on unsigned `.exe`/`.msi`. Sign with a code-signing certificate; see the Tauri "Windows Code Signing" guide.
+- **macOS:** Gatekeeper blocks unsigned apps downloaded from the internet. You need an Apple Developer ID certificate and notarization; see Tauri "macOS Code Signing".
+- **Linux:** no signing is required.
+
+For your own use, run the unsigned build. On macOS right-click the app and choose Open the first time.
+
+### Build in CI (one runner per OS)
+A minimal GitHub Actions matrix, saved as `.github/workflows/build.yml`:
+```yaml
+name: build
+on: { push: { tags: ["v*"] }, workflow_dispatch: {} }
+jobs:
+  build:
+    strategy:
+      matrix: { os: [windows-latest, macos-latest, ubuntu-22.04] }
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: swatinem/rust-cache@v2
+      - if: matrix.os == 'ubuntu-22.04'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libayatana-appindicator3-dev
+      - run: npm ci
+      - run: cargo test -p dev_cleaner_core
+      - run: npm run tauri build
+      - uses: actions/upload-artifact@v4
+        with: { name: "bundle-${{ matrix.os }}", path: target/release/bundle/** }
+```
 
 ## The app icon
-The source is `app-icon.svg` (a folder with a broom on an indigo background). Regenerate every size and format after changing it:
+
+### Where it lives
+| File | Used for |
+| --- | --- |
+| `app-icon.svg` | The source. Edit this one. |
+| `src-tauri/icons/*.png`, `icon.ico`, `icon.icns` | Generated. Window, taskbar, installer and app bundle icons. |
+| `public/icon.svg` | The logo in the sidebar (a copy of the source). |
+
+### Change or regenerate the icon
+1. Edit `app-icon.svg` (square, ideally 1024 x 1024, with the artwork inside the rounded square so corners stay transparent).
+2. Generate every size and format:
+   ```bash
+   npx tauri icon app-icon.svg
+   ```
+   This writes PNGs, `icon.ico` (Windows) and `icon.icns` (macOS) into `src-tauri/icons/`. It also creates `android/` and `ios/` folders that this desktop app does not use:
+   ```bash
+   rm -rf src-tauri/icons/android src-tauri/icons/ios      # Windows PowerShell: Remove-Item -Recurse -Force src-tauri\icons\android, src-tauri\icons\ios
+   ```
+3. Copy it for the sidebar: `cp app-icon.svg public/icon.svg` (PowerShell: `Copy-Item app-icon.svg public\icon.svg`).
+4. Make the app pick it up. The icon is compiled into the executable, so Cargo must rebuild it:
+   ```bash
+   cargo clean -p dev-cleaner-app
+   npm run tauri dev          # or: npm run tauri build
+   ```
+5. If the taskbar or Dock still shows the old icon, the OS is caching it:
+   - **Windows:** unpin the app, close it, restart Explorer (Task Manager → Windows Explorer → Restart), run again. For a stubborn cache, delete `%LOCALAPPDATA%\IconCache.db` and sign out and in.
+   - **macOS:** `killall Dock`, and for an installed app drag it out of and back into the Applications folder.
+   - **Linux:** log out and in, or run `gtk-update-icon-cache`.
+
+`npx tauri icon` needs a square image of at least 512 px. PNG works too: `npx tauri icon my-logo.png`.
+
+## Everyday development workflow
+
+### Branches and pull requests
 ```bash
-npx tauri icon app-icon.svg
-rm -rf src-tauri/icons/android src-tauri/icons/ios   # not used
-cp app-icon.svg public/icon.svg
+git checkout -b feature/my-change
+# edit, then run the checks (next section)
+git add -A && git commit -m "Describe the change"
+git push -u origin feature/my-change
 ```
-This writes the PNGs, `icon.ico` (Windows) and `icon.icns` (macOS) into `src-tauri/icons/`.
+Open a pull request against `main`. Keep it focused: one feature or fix, with tests for core changes and a screenshot for UI changes.
+
+### Checks to run before every pull request
+```bash
+cargo fmt --all
+cargo test -p dev_cleaner_core
+cargo check -p dev-cleaner-app
+npm run build
+```
+
+### Where things are stored while developing
+`tauri dev` uses the real app data folder (see the [User guide](USER_GUIDE.md#where-your-data-is-stored)), so your dev runs share settings and history with an installed copy. Turn on **Dry run** while testing cleaning so real folders are not touched, or point **Scan folders** at a throwaway folder you create with fake `node_modules`.
+
+### Making a safe sandbox to test cleaning
+```bash
+mkdir -p ~/sandbox/demo/node_modules && echo '{}' > ~/sandbox/demo/package.json
+dd if=/dev/zero of=~/sandbox/demo/node_modules/big.bin bs=1M count=50
+```
+Add `~/sandbox` as a scan folder and clean it as often as you like.
+
+### Debugging
+- **Frontend:** in `tauri dev`, right-click the window and choose Inspect (or press F12 / Ctrl+Shift+I) for the browser dev tools.
+- **Rust:** `println!`/`eprintln!` output appears in the terminal running `tauri dev`. Set `RUST_BACKTRACE=1` for stack traces.
+- **Events:** `scan-item`, `scan-progress`, `scan-done`, `global-item`, `global-progress`, `global-done` are visible in the dev tools console if you add a temporary `listen` log.
+
+### Common development problems
+| Problem | Fix |
+| --- | --- |
+| `npm.ps1 cannot be loaded` (Windows PowerShell) | See the script policy fix in the [Windows guide](WINDOWS_SETUP.md), or use `cmd`. |
+| `EBUSY` / watcher errors on Windows during `tauri dev` | Harmless: the file watcher touched a locked system file. |
+| First `tauri dev` seems stuck | Rust is compiling. Wait for it; later runs are fast. |
+| `linker 'link.exe' not found` | Install the C++ Build Tools (Windows guide). |
+| Linux: `webkit2gtk-4.1` not found | Install the system libraries listed under [Prerequisites](#prerequisites). |
+| Port 1420 already in use | Another dev server is running. Stop it, or change the port in `vite.config.ts` and `tauri.conf.json`. |
+| UI changes do not show | Hard refresh in the dev tools, or restart `tauri dev`. |
+| Rust changes do not show | `tauri dev` rebuilds on save; if not, stop and restart it. |
+| Stale or strange build | `cargo clean`, delete `node_modules` and `dist`, run `npm install` again. |
+| Old icon after changing it | See [The app icon](#the-app-icon), step 4 and 5. |
+| Disk fills up from `target/` | `cargo clean` removes it (several GB). Dev Cleaner itself can clean other Rust projects. |
 
 ## Conventions
 - UI text is plain language for non-experts: say "folder", "remove", "comes back with". Avoid jargon in labels.

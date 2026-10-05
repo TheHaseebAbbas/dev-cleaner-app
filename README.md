@@ -54,7 +54,9 @@ cargo test -p dev_cleaner_core
 npm run tauri build        # installers
 ```
 
-You need Rust, Node.js 20+ and the Tauri system prerequisites. The OS guides above list them. More in the [Developer guide](docs/DEVELOPMENT.md).
+You need Rust, Node.js 20+ and the Tauri system prerequisites. The OS guides above list them.
+
+More in the [Developer guide](docs/DEVELOPMENT.md): [building installers](docs/DEVELOPMENT.md#building-releases) per OS, [signing and CI](docs/DEVELOPMENT.md#signing-needed-for-public-releases), [changing the app icon](docs/DEVELOPMENT.md#the-app-icon) (and making it show up), the [everyday workflow](docs/DEVELOPMENT.md#everyday-development-workflow) and [common development problems](docs/DEVELOPMENT.md#common-development-problems).
 
 ## Project layout
 
