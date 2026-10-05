@@ -31,6 +31,8 @@ pub struct Settings {
     pub theme: String,
     /// Start scanning as soon as the app opens.
     pub scan_on_launch: bool,
+    /// Days after which items Dev Cleaner moved to the Trash are removed for good. 0 keeps them forever.
+    pub trash_retention_days: u32,
 }
 
 impl Default for Settings {
@@ -50,6 +52,7 @@ impl Default for Settings {
             max_depth: 8,
             theme: "system".into(),
             scan_on_launch: false,
+            trash_retention_days: 30,
         }
     }
 }

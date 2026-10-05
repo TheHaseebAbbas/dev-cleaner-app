@@ -14,6 +14,7 @@ It is the interactive version of [jemishavasoya/dev-cleaner](https://github.com/
 | --- | --- |
 | **Projects** | Scans your code folders and lists every rebuildable folder with size, file count, age, git status and warnings. Folders made of independent pieces expand into sub-items you can remove one by one. |
 | **Tool caches** | Measures caches and SDKs in your user folder (npm, Cargo, Gradle, Android SDK, Xcode, JetBrains, VS Code caches and more). Docker and WSL disks are shown view-only. |
+| **Trash** | Everything Dev Cleaner moved to the Trash, with **Restore** and **Delete forever**, and an auto-clear timer you can change. |
 | **History** | Every cleanup, with the total space reclaimed. |
 | **Settings** | Scan folders, protected paths, rules, delete mode, dry run, depth, filters and theme. |
 

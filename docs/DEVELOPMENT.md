@@ -57,6 +57,7 @@ core/                  Pure Rust library, no Tauri dependency, fully tested
   src/cleaner.rs       Safe deletion (Trash / permanent / dry run)
   src/settings.rs      Settings and defaults
   src/history.rs       Append-only history log
+  src/trash_bin.rs     List, restore and purge items Dev Cleaner put in the OS Trash; expiry rules
   src/tests.rs         Tests
 src-tauri/             Tauri shell
   src/lib.rs           Commands and events
@@ -93,6 +94,8 @@ React view ──invoke──▶ Tauri command ──▶ core
 **Deletion.** `delete_items` and `delete_global_caches` accept only paths from the last scan (or parts under them), refuse protected, view-only, home, root and symlink targets, and call `cleaner::delete_one`, which records history.
 
 **Warnings.** `scanner::assess` (projects) and the `.warn()` entries of `global.rs` produce `Warning { level: caution | danger, message }`. The UI shows badges and requires an acknowledgement for `danger`.
+
+**Trash.** `trash_bin` uses the `trash` crate's `os_limited` API (Windows and Linux only) and shows only items that match a history entry, so it never touches other Trash content. A background thread in `src-tauri` purges expired items at start and hourly.
 
 **Data files.** `settings.json` and `history.jsonl` in the app config directory.
 

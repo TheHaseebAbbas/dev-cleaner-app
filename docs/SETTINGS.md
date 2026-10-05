@@ -28,6 +28,13 @@ Sections appear in this order in the app.
 | **Dry run** (`dry_run`) | Off | Runs the whole flow and reports what would be freed, but deletes nothing. A banner in the sidebar reminds you it is on. | On for your first run, after changing rules, or when demoing. Off afterwards. |
 | **Ask before removing** (`confirm_before_delete`) | On | Shows a summary dialog before removing. Items with a red warning always ask, even if this is off. | Keep on. Turn off only if you clean often and trust your protected paths. |
 
+### Trash
+| Setting | Default | What it does | Best value |
+| --- | --- | --- | --- |
+| **Clear automatically after** (`trash_retention_days`) | 30 days | Items Dev Cleaner moved to the Trash are deleted for good after this many days. 0 means never. | 7 to 14 days on a small disk, 30 days as a safety net, 0 if you want to review everything yourself. Not available on macOS. |
+
+See [the Trash tab](USER_GUIDE.md#where-removed-folders-go-and-getting-them-back) to restore or delete items now.
+
 Note on Trash: on a drive with little free space, Trash does not free anything until you empty it. Folders such as `node_modules` hold huge numbers of files, so emptying can take a while.
 
 ### Scanning
@@ -152,4 +159,4 @@ Add your own in **Settings → Cleanup rules → Add your own rule**.
 Always use a marker file when the folder name is generic (`dist`, `out`, `cache`). Without one, every folder with that name inside your scan folders matches. Custom rules are marked with a **custom** badge and can be deleted again.
 
 ## Editing settings.json by hand
-The file is in the data folder listed in the [User guide](USER_GUIDE.md#where-your-data-is-stored). Close the app first. Fields: `scan_roots`, `exclude_names`, `protected_paths`, `rule_enabled`, `custom_rules`, `delete_mode` (`"trash"` or `"permanent"`), `dry_run`, `confirm_before_delete`, `min_size_mb`, `min_age_days`, `max_depth`, `theme` (`"system"`, `"light"`, `"dark"`), `scan_on_launch`. Missing fields use defaults, so you can delete the file to start over.
+The file is in the data folder listed in the [User guide](USER_GUIDE.md#where-your-data-is-stored). Close the app first. Fields: `scan_roots`, `exclude_names`, `protected_paths`, `rule_enabled`, `custom_rules`, `delete_mode` (`"trash"` or `"permanent"`), `dry_run`, `confirm_before_delete`, `min_size_mb`, `min_age_days`, `max_depth`, `theme` (`"system"`, `"light"`, `"dark"`), `scan_on_launch`, `trash_retention_days`. Missing fields use defaults, so you can delete the file to start over.

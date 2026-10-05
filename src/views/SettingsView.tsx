@@ -4,7 +4,7 @@ import { api, type Rule, type Settings } from "../api";
 import { Icon } from "../ui/Icon";
 import { Badge, Segmented, Toggle } from "../ui/primitives";
 
-function Section(props: { icon: "sliders" | "search" | "shield" | "layers" | "eye"; title: string; description: string; children: ReactNode }) {
+function Section(props: { icon: "sliders" | "search" | "shield" | "layers" | "eye" | "trash"; title: string; description: string; children: ReactNode }) {
   return (
     <section className="card p-5">
       <div className="mb-4 flex items-start gap-3">
@@ -50,6 +50,8 @@ function PathList(props: { title: string; hint: string; values: string[]; onChan
   );
 }
 
+const RETENTION_PRESETS = [0, 7, 14, 30, 90];
+
 function Num(props: { value: number; min: number; max?: number; suffix: string; onChange: (n: number) => void }) {
   return <div className="flex items-center gap-2"><input className="input w-20 text-right" type="number" min={props.min} max={props.max} value={props.value} onChange={(e) => props.onChange(Number(e.target.value))} /><span className="muted text-sm">{props.suffix}</span></div>;
 }
@@ -91,6 +93,17 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
         </Field>
         <Toggle checked={s.dry_run} onChange={(v) => set("dry_run", v)} label="Dry run" description="Pretend to clean and report what would be freed. Nothing is touched. Good for trying the app." />
         <Toggle checked={s.confirm_before_delete} onChange={(v) => set("confirm_before_delete", v)} label="Ask before removing" description="Show a summary first. Folders marked as risky always ask, even with this off." />
+      </Section>
+
+      <Section icon="trash" title="Trash" description="Where removed folders go, and when they are cleared for good. Applies to folders moved to the Trash by this app.">
+        <Field label="Clear automatically after" hint="Items Dev Cleaner moved to the Trash are deleted for good after this many days. Items you restore are not affected.">
+          <div className="flex flex-col items-end gap-2">
+            <Segmented value={String(RETENTION_PRESETS.includes(s.trash_retention_days) ? s.trash_retention_days : "custom")} onChange={(v) => v !== "custom" && set("trash_retention_days", Number(v))}
+              options={[{ value: "0", label: "Never" }, { value: "7", label: "7 days" }, { value: "14", label: "14 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }, { value: "custom", label: "Custom" }]} />
+            <Num value={s.trash_retention_days} min={0} max={3650} suffix="days (0 = never)" onChange={(n) => set("trash_retention_days", Math.max(0, Math.round(n)))} />
+          </div>
+        </Field>
+        <p className="muted text-xs">Check happens when the app opens and every hour while it is running. Open the Trash tab to restore items or delete them now. Not available on macOS, where you manage the Trash in Finder.</p>
       </Section>
 
       <Section icon="search" title="Scanning" description="Where and how deep to look.">

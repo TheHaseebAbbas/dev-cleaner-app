@@ -71,6 +71,7 @@ export interface Settings {
   max_depth: number;
   theme: "system" | "light" | "dark";
   scan_on_launch: boolean;
+  trash_retention_days: number;
 }
 
 export interface GlobalCache {
@@ -144,6 +145,29 @@ export interface GlobalSummary {
   found: number;
 }
 
+export interface TrashEntry {
+  id: string;
+  name: string;
+  original_path: string;
+  deleted_at: number;
+  bytes: number;
+  expires_at: number | null;
+}
+
+export interface TrashOutcome {
+  id: string;
+  path: string;
+  ok: boolean;
+  error: string | null;
+  bytes: number;
+}
+
+export interface TrashInfo {
+  supported: boolean;
+  location: string;
+  retention_days: number;
+}
+
 export const api = {
   getSettings: () => invoke<Settings>("get_settings"),
   saveSettings: (settings: Settings) => invoke<void>("save_settings", { settings }),
@@ -157,6 +181,12 @@ export const api = {
   getItems: () => invoke<Item[]>("get_items"),
   deleteGlobalCaches: (ids: string[], partPaths: string[]) =>
     invoke<DeleteOutcome[]>("delete_global_caches", { ids, partPaths }),
+  trashInfo: () => invoke<TrashInfo>("trash_info"),
+  trashList: () => invoke<TrashEntry[]>("trash_list"),
+  trashRestore: (ids: string[]) => invoke<TrashOutcome[]>("trash_restore", { ids }),
+  trashPurge: (ids: string[]) => invoke<TrashOutcome[]>("trash_purge", { ids }),
+  trashClearExpired: () => invoke<TrashOutcome[]>("trash_clear_expired"),
+  openTrash: () => invoke<void>("open_trash"),
   getHistory: () => invoke<HistoryEntry[]>("get_history"),
   revealPath: (path: string) => invoke<void>("reveal_path", { path }),
   diskSpace: () => invoke<[number, number] | null>("disk_space"),
@@ -196,4 +226,12 @@ export function fmtAge(secs: number): string {
   if (d < 31) return `${d} days ago`;
   if (d < 365) return `${Math.floor(d / 30)} mo ago`;
   return `${Math.floor(d / 365)} y ago`;
+}
+
+/** "in 3 days", "tomorrow", "today" for a future unix time. */
+export function fmtUntil(secs: number): string {
+  const d = Math.ceil((secs - Date.now() / 1000) / 86400);
+  if (d <= 0) return "today";
+  if (d === 1) return "tomorrow";
+  return `in ${d} days`;
 }

@@ -5,7 +5,7 @@
 ## How deletion is protected
 | Protection | What it means |
 | --- | --- |
-| **Trash first** | The default mode moves folders to the Trash so you can put them back. |
+| **Trash first** | The default mode moves folders to the Trash so you can put them back from the Trash tab (Windows, Linux) or Finder (macOS). Items are cleared for good only after the number of days you choose. |
 | **Dry run** | A switch that makes every clean-up a rehearsal. |
 | **Only scanned paths** | The delete command accepts only paths the last scan produced (or parts of them). It cannot be asked to remove an arbitrary path. |
 | **Rule-based matching** | Folders match only with their marker file beside them. |
@@ -39,7 +39,7 @@ Red items need the **I understand** tick before the confirm button works. In dry
 
 **Why are some of my projects missing?** They are outside your scan folders, deeper than the search depth, under a skipped folder name, or no marker file sits beside the folder. Check **Where it looks**.
 
-**Can I undo a permanent delete?** No. Use Trash mode unless you are sure.
+**How do I get a removed folder back?** Open the Trash tab and press Restore. See the [User guide](USER_GUIDE.md#where-removed-folders-go-and-getting-them-back). **Can I undo a permanent delete?** No. Use Trash mode unless you are sure.
 
 **Does it send data anywhere?** No. Scanning and cleaning happen on your computer. The only network use is when you run the app from source and your package manager downloads dependencies.
 

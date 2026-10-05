@@ -5,6 +5,7 @@ use dev_cleaner_core::{
     rules::Rule,
     scanner::{self, Item, ScanOptions},
     settings::Settings,
+    trash_bin::{self, TrashEntry, TrashOutcome},
 };
 use std::{
     path::PathBuf,
@@ -258,6 +259,67 @@ fn reveal_path(path: String) -> Result<(), String> {
     Ok(())
 }
 
+#[derive(serde::Serialize)]
+struct TrashInfo {
+    supported: bool,
+    location: &'static str,
+    retention_days: u32,
+}
+
+#[tauri::command]
+fn trash_info(app: AppHandle) -> Result<TrashInfo, String> {
+    let s = Settings::load(&settings_path(&app)?);
+    Ok(TrashInfo { supported: trash_bin::supported(), location: trash_bin::location_hint(), retention_days: s.trash_retention_days })
+}
+
+#[tauri::command]
+fn trash_list(app: AppHandle) -> Result<Vec<TrashEntry>, String> {
+    let s = Settings::load(&settings_path(&app)?);
+    trash_bin::list(&history::load(&history_path(&app)?), s.trash_retention_days)
+}
+
+#[tauri::command]
+fn trash_restore(app: AppHandle, ids: Vec<String>) -> Result<Vec<TrashOutcome>, String> {
+    trash_bin::restore(&history::load(&history_path(&app)?), &ids)
+}
+
+#[tauri::command]
+fn trash_purge(app: AppHandle, ids: Vec<String>) -> Result<Vec<TrashOutcome>, String> {
+    trash_bin::purge(&history::load(&history_path(&app)?), &ids)
+}
+
+/// Remove items older than the retention period now.
+#[tauri::command]
+fn trash_clear_expired(app: AppHandle) -> Result<Vec<TrashOutcome>, String> {
+    run_trash_expiry(&app)
+}
+
+fn now_secs() -> u64 {
+    std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+fn run_trash_expiry(app: &AppHandle) -> Result<Vec<TrashOutcome>, String> {
+    let s = Settings::load(&settings_path(app)?);
+    let out = trash_bin::purge_expired(&history::load(&history_path(app)?), s.trash_retention_days, now_secs())?;
+    if out.iter().any(|o| o.ok) {
+        let _ = app.emit("trash-changed", ());
+    }
+    Ok(out)
+}
+
+#[tauri::command]
+fn open_trash() -> Result<(), String> {
+    let (cmd, args): (&str, Vec<String>) = if cfg!(target_os = "macos") {
+        ("open", vec![dev_cleaner_core_home().map(|h| h.join(".Trash").to_string_lossy().into_owned()).unwrap_or_default()])
+    } else if cfg!(target_os = "windows") {
+        ("explorer", vec!["shell:RecycleBinFolder".into()])
+    } else {
+        ("xdg-open", vec!["trash:///".into()])
+    };
+    std::process::Command::new(cmd).args(args).spawn().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 #[tauri::command]
 fn disk_space() -> Option<(u64, u64)> {
     // (total, free) bytes of the volume that holds the home directory.
@@ -273,9 +335,19 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .manage(AppState::default())
+        .setup(|app| {
+            // Clear expired Trash items at start and then every hour while the app is open.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || loop {
+                let _ = run_trash_expiry(&handle);
+                std::thread::sleep(std::time::Duration::from_secs(3600));
+            });
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             get_settings, save_settings, list_rules, start_scan, cancel_scan, delete_items,
-            get_items, get_locations, start_global_scan, cancel_global_scan, delete_global_caches, get_history, reveal_path, disk_space
+            get_items, get_locations, start_global_scan, cancel_global_scan, delete_global_caches, get_history, reveal_path, disk_space,
+            trash_info, trash_list, trash_restore, trash_purge, trash_clear_expired, open_trash
         ])
         .run(tauri::generate_context!())
         .expect("error while running Dev Cleaner");

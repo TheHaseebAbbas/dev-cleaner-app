@@ -5,13 +5,15 @@ import { Icon, type IconName } from "./ui/Icon";
 import { Spinner } from "./ui/primitives";
 import { GlobalView } from "./views/GlobalView";
 import { History } from "./views/History";
+import { TrashView } from "./views/TrashView";
 import { Projects } from "./views/Projects";
 import { SettingsView } from "./views/SettingsView";
 
-type Tab = "projects" | "global" | "history" | "settings";
+type Tab = "projects" | "global" | "trash" | "history" | "settings";
 const TABS: { id: Tab; label: string; title: string; icon: IconName }[] = [
   { id: "projects", label: "Projects", title: "Project clean-up", icon: "folder" },
   { id: "global", label: "Tool caches", title: "Global caches and SDKs", icon: "database" },
+  { id: "trash", label: "Trash", title: "Trash", icon: "trash" },
   { id: "history", label: "History", title: "Clean-up history", icon: "clock" },
   { id: "settings", label: "Settings", title: "Settings", icon: "sliders" },
 ];
@@ -91,6 +93,7 @@ export default function App() {
         <div className="min-h-0 flex-1">
           {tab === "projects" && <Projects scan={scan} settings={settings} onOpenSettings={() => setTab("settings")} onDeleted={onDeleted} />}
           {tab === "global" && <GlobalView scan={globalScan} settings={settings} onOpenSettings={() => setTab("settings")} onDeleted={onDeleted} />}
+          {tab === "trash" && <TrashView settings={settings} onOpenSettings={() => setTab("settings")} onChanged={() => api.diskSpace().then(setDisk).catch(() => {})} />}
           {tab === "history" && <History />}
           {tab === "settings" && <SettingsView settings={settings} onChange={updateSettings} />}
         </div>

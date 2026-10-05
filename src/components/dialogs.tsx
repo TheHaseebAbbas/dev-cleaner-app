@@ -10,7 +10,7 @@ export function ConfirmDialog(props: { entries: PlanEntry[]; settings: Settings;
   const [ack, setAck] = useState(false);
   const bytes = props.entries.reduce((s, e) => s + e.bytes, 0);
   const dry = props.settings.dry_run;
-  const mode = dry ? "Nothing will be deleted (dry run)." : props.settings.delete_mode === "trash" ? "They move to the Trash, so you can put them back." : "They are deleted permanently and cannot be restored.";
+  const mode = dry ? "Nothing will be deleted (dry run)." : props.settings.delete_mode === "trash" ? "They move to the Trash, so you can put them back from the Trash tab." : "They are deleted permanently and cannot be restored.";
   const blocked = needsAck(props.entries) && !ack && !dry;
   return (
     <Modal
@@ -89,7 +89,7 @@ export function HelpDialog(props: { settings: Settings; rules: Rule[]; onOpenSet
           A folder is picked only when it matches one of the {active.length} active rules <em>and</em> its project file sits next to it. So <code>node_modules</code> counts only beside a <code>package.json</code>. Your own source files are never selected.
         </>)}
         {step(3, "You choose, then confirm", <>
-          Tick folders (or single parts of a folder). Before anything happens you see the exact paths. {props.settings.delete_mode === "trash" ? "They move to the Trash, so you can put them back." : "They are deleted permanently."} Each one comes back with its restore command, such as <code>npm install</code>.
+          Tick folders (or single parts of a folder). Before anything happens you see the exact paths. {props.settings.delete_mode === "trash" ? "They move to the Trash, so you can put them back from the Trash tab." : "They are deleted permanently."} Each one comes back with its restore command, such as <code>npm install</code>.
         </>)}
         {step(4, "Risky things are flagged", <>
           <Badge tone="amber" icon="alert">Check first</Badge> means think twice (not in .gitignore, changed in the last 3 days, a version other projects may use). <Badge tone="red" icon="alert">May be required</Badge> means it may be needed or impossible to recreate (tracked by git, a Python environment with no requirements file, your default Rust toolchain, emulators, Xcode archives). For those you must tick an extra box.

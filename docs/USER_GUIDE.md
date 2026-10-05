@@ -6,6 +6,7 @@
 1. [How the app decides what to show](#how-the-app-decides-what-to-show)
 2. [The Projects tab](#the-projects-tab)
 3. [The Tool caches tab](#the-tool-caches-tab)
+   - [Where removed folders go, and getting them back](#where-removed-folders-go-and-getting-them-back)
 4. [Removing only part of a folder](#removing-only-part-of-a-folder)
 5. [Warnings](#warnings)
 6. [Cleaning](#cleaning)
@@ -82,6 +83,31 @@ More in [Safety](SAFETY.md).
 4. A result dialog shows how much was freed and lists any folder that could not be removed with the reason. The usual reason is a file in use by an editor or dev server.
 
 With **Dry run** on, the same flow runs but nothing is touched.
+
+## Where removed folders go, and getting them back
+In **Move to Trash** mode (the default) folders go to your operating system's Trash:
+
+| System | Where | Open it |
+| --- | --- | --- |
+| Windows | Recycle Bin | Desktop icon, or the **Open** button in the Trash tab |
+| macOS | `~/.Trash` (the Trash in the Dock) | Dock, or **Open** |
+| Linux | `~/.local/share/Trash` (on other drives, a `.Trash-<id>` folder at the drive root) | File manager, or **Open** |
+
+In **Delete permanently** mode nothing goes to the Trash and it cannot be undone.
+
+### The Trash tab (Windows and Linux)
+Lists the folders Dev Cleaner removed, newest first: size, when they were removed, where they will be restored to, and when they will be cleared automatically.
+
+- **Restore** (per row, or **Restore selected**) puts the folder back at its original path. If something already exists there, or the parent folder is gone, the result dialog explains and nothing is lost.
+- **Delete forever** removes the selected items from the Trash for good, after a confirmation.
+- Only folders Dev Cleaner removed are listed or touched. Other things in your Trash are never shown or deleted.
+- After restoring, rescan so the folder appears in the list again.
+
+### Automatic clearing
+**Settings → Trash → Clear automatically after** sets how many days items stay (Never, 7, 14, 30, 90, or any number; default 30). The app checks when it opens and every hour while it is running, and removes only items older than that. Items already restored are not affected. Set it to 0 / Never to keep everything until you delete it yourself. The Trash tab shows each item's remaining time. The app has to be running for cleanup to happen.
+
+### macOS
+macOS does not let apps list or restore the Trash, so the Trash tab only offers **Open Trash**. In Finder, right-click an item and choose **Put Back**. Auto-clear is not available; use Finder's "Remove items from the Trash after 30 days" setting (Finder → Settings → Advanced) instead.
 
 ## History
 Every removal is logged with time, path, how it was removed and bytes freed. The top shows the total reclaimed.
