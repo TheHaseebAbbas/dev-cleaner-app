@@ -128,7 +128,7 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
     : <button className="btn" onClick={scan.start}><Icon name="refresh" className="h-4 w-4" />Rescan</button>;
   const panel = scanning && (
     <div className="mb-4"><ScanPanel title="Scanning tools & SDKs" phase={p ? `Checked ${p.done} of ${p.total} known locations` : "Looking for known locations"}
-      fraction={p && p.total ? p.done / p.total : null} current={p?.current} stats={[{ label: "Found", value: caches.length }]} elapsedMs={elapsed} onStop={scan.stop} /></div>
+      fraction={p && p.total ? p.done / p.total : null} current={p?.current} stats={[{ label: "Found", value: caches.length }]} elapsedMs={elapsed} /></div>
   );
 
   if (scanning && !caches.length) return <div className="h-full overflow-auto">{header(scanBtn)}{panel}<div className="card overflow-hidden"><SkeletonRows rows={5} /></div>{dialogs}</div>;

@@ -1,9 +1,8 @@
 import type { ReactNode } from "react";
 import { fmtDuration } from "../api";
-import { Icon } from "../ui/Icon";
 import { ProgressBar, Spinner } from "../ui/primitives";
 
-/** The card shown while a scan runs: what it is doing, how far along, and a Stop button. */
+/** The card shown while a scan runs: what it is doing, how far along, and progress; Stop lives in the page header. */
 export function ScanPanel(props: {
   title: string;
   phase: string;
@@ -12,17 +11,13 @@ export function ScanPanel(props: {
   current?: string;
   stats: { label: string; value: ReactNode }[];
   elapsedMs: number;
-  onStop: () => void;
 }) {
   return (
     <div className="card rise p-5">
       <div className="flex items-start gap-4">
         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-600 dark:bg-indigo-900/40 dark:text-indigo-400"><Spinner className="h-5 w-5" /></div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center justify-between gap-3">
-            <h2 className="text-base font-semibold">{props.title}</h2>
-            <button className="btn btn-sm" onClick={props.onStop}><Icon name="stop" className="h-3 w-3" />Stop</button>
-          </div>
+          <h2 className="text-base font-semibold">{props.title}</h2>
           <p className="muted text-sm">{props.phase}</p>
           <div className="mt-3"><ProgressBar value={props.fraction ?? undefined} indeterminate={props.fraction === null} /></div>
           <div className="muted mt-2 h-4 truncate font-mono text-xs" title={props.current}>{props.current || " "}</div>

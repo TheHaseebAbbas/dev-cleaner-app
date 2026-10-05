@@ -219,7 +219,7 @@ export function Projects(props: {
       fraction={p?.phase === "measure" && p.total ? p.done / p.total : null}
       current={p?.current}
       stats={[{ label: "Folders checked", value: p?.phase === "discover" ? p.visited.toLocaleString() : (scan.summary?.dirs_visited ?? "…") }, { label: "Found", value: items.length }]}
-      elapsedMs={elapsed} onStop={scan.stop} /></div>
+      elapsedMs={elapsed} /></div>
   );
 
   if (scanning && !items.length) {
