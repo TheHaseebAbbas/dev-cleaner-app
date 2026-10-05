@@ -1,0 +1,122 @@
+name: release
+
+# Push a tag such as v1.0.0 (matching the version in src-tauri/tauri.conf.json)
+# to build every platform and attach the files to a draft GitHub release.
+# Review the draft on GitHub and publish it by hand.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to build, for example v1.0.0"
+        required: true
+
+permissions:
+  contents: write
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+
+jobs:
+  draft:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ env.TAG }}" }
+      - id: version
+        name: Check the tag matches the app version
+        run: |
+          version="${TAG#v}"
+          app_version=$(jq -r .version src-tauri/tauri.conf.json)
+          if [ "$version" != "$app_version" ]; then
+            echo "::error::Tag $TAG does not match version $app_version in src-tauri/tauri.conf.json"
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - name: Create the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          sed "s/{{VERSION}}/$VERSION/g" .github/release-notes.md > notes.md
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "Release $TAG already exists; files will be replaced."
+          else
+            gh release create "$TAG" --draft --verify-tag --title "Dev Cleaner $VERSION" --notes-file notes.md
+          fi
+
+  build:
+    needs: draft
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows
+          - os: macos-latest
+            platform: macos
+            args: --target universal-apple-darwin
+          - os: ubuntu-22.04
+            platform: linux
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run: { shell: bash }
+    env:
+      VERSION: ${{ needs.draft.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ env.TAG }}" }
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: swatinem/rust-cache@v2
+      - if: matrix.platform == 'linux'
+        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libayatana-appindicator3-dev patchelf rpm
+      - run: npm ci
+      - run: cargo test -p dev_cleaner_core
+      - run: npm run tauri build -- ${{ matrix.args }}
+
+      - name: Collect files with release names
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          mkdir out
+          # Copy exactly one file matching the pattern to out/<name>.
+          take() {
+            local name=$1; shift
+            local files=( $@ )
+            if [ ${#files[@]} -ne 1 ]; then
+              echo "::error::Expected one file for $name, found ${#files[@]}: ${files[*]:-none}"
+              exit 1
+            fi
+            cp "${files[0]}" "out/$name"
+          }
+          base="dev-cleaner-$VERSION"
+          case "${{ matrix.platform }}" in
+            windows)
+              b=target/release
+              take "$base-windows-x64-portable.exe" "$b/dev-cleaner-app.exe"
+              take "$base-windows-x64-setup.exe" "$b/bundle/nsis/*-setup.exe"
+              take "$base-windows-x64.msi" "$b/bundle/msi/*.msi"
+              ;;
+            macos)
+              take "$base-macos-universal.dmg" "target/universal-apple-darwin/release/bundle/dmg/*.dmg"
+              ;;
+            linux)
+              b=target/release/bundle
+              take "$base-linux-x86_64.AppImage" "$b/appimage/*.AppImage"
+              take "$base-linux-amd64.deb" "$b/deb/*.deb"
+              take "$base-linux-x86_64.rpm" "$b/rpm/*.rpm"
+              ;;
+          esac
+          ls -l out
+
+      - name: Attach to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "$TAG" out/* --clobber

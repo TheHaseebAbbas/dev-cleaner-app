@@ -174,38 +174,30 @@ Debug build with the dev tools open, closer to production than `tauri dev`: `npm
 ### Versioning
 Bump `version` in all three places together: `package.json`, `src-tauri/tauri.conf.json`, `src-tauri/Cargo.toml` (and `core/Cargo.toml`). Then tag the commit, for example `git tag v0.2.0 && git push --tags`.
 
-### Signing (needed for public releases)
-Unsigned installers work but show OS warnings.
-- **Windows:** SmartScreen warns on unsigned `.exe`/`.msi`. Sign with a code-signing certificate; see the Tauri "Windows Code Signing" guide.
-- **macOS:** Gatekeeper blocks unsigned apps downloaded from the internet. You need an Apple Developer ID certificate and notarization; see Tauri "macOS Code Signing".
+### Signing
+Releases are unsigned for now, so each OS warns the first time the app opens. The README and the release notes tell users how to open it anyway.
+- **Windows:** SmartScreen warns on unsigned `.exe`/`.msi`. To remove the warning, sign with a code-signing certificate; see the Tauri "Windows Code Signing" guide.
+- **macOS:** Gatekeeper blocks unsigned apps downloaded from the internet until the user allows them. To remove that, you need an Apple Developer ID certificate and notarization; see Tauri "macOS Code Signing".
 - **Linux:** no signing is required.
 
-For your own use, run the unsigned build. On macOS right-click the app and choose Open the first time.
+### Publishing a release (GitHub Actions)
+`.github/workflows/release.yml` builds every OS when you push a version tag:
 
-### Build in CI (one runner per OS)
-A minimal GitHub Actions matrix, saved as `.github/workflows/build.yml`:
-```yaml
-name: build
-on: { push: { tags: ["v*"] }, workflow_dispatch: {} }
-jobs:
-  build:
-    strategy:
-      matrix: { os: [windows-latest, macos-latest, ubuntu-22.04] }
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20 }
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: swatinem/rust-cache@v2
-      - if: matrix.os == 'ubuntu-22.04'
-        run: sudo apt-get update && sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev libxdo-dev libayatana-appindicator3-dev
-      - run: npm ci
-      - run: cargo test -p dev_cleaner_core
-      - run: npm run tauri build
-      - uses: actions/upload-artifact@v4
-        with: { name: "bundle-${{ matrix.os }}", path: target/release/bundle/** }
-```
+1. Bump the version (see Versioning above) and merge to `main`.
+2. Tag that commit with the same version: `git tag v1.0.0 && git push origin v1.0.0`. The workflow stops if the tag and `src-tauri/tauri.conf.json` disagree.
+3. The workflow creates a **draft** release with the notes from `.github/release-notes.md` (`{{VERSION}}` is filled in), then builds on Windows, macOS and Linux and attaches:
+
+| File | From |
+| --- | --- |
+| `dev-cleaner-<v>-windows-x64-portable.exe` | `target/release/dev-cleaner-app.exe`, the standalone app (no installer) |
+| `dev-cleaner-<v>-windows-x64-setup.exe` | NSIS installer |
+| `dev-cleaner-<v>-windows-x64.msi` | MSI installer |
+| `dev-cleaner-<v>-macos-universal.dmg` | Universal (Apple Silicon and Intel) disk image |
+| `dev-cleaner-<v>-linux-x86_64.AppImage`, `-linux-amd64.deb`, `-linux-x86_64.rpm` | Linux bundles |
+
+4. Open the draft on the Releases page, check it, and press **Publish**.
+
+To rebuild an existing tag (for example after a runner failure), run the workflow from the Actions tab with that tag. Files already on the release are replaced.
 
 ## The app icon
 
