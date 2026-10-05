@@ -383,7 +383,7 @@ fn global_parts_use_references_and_protection() {
     write(&h.join(".gradle/caches/modules-2/x"), 100);
     let mut refs = Refs { projects: 2, ..Default::default() };
     refs.android_platforms.entry("34".into()).or_default().insert("app".into());
-    let ctx = GlobalContext { scan_id: "s".into(), protected_paths: vec![h.join(".gradle/caches")], refs: Some(refs), detect_sensitive_files: true, min_confidence: None };
+    let ctx = GlobalContext { scan_id: "s".into(), protected_paths: vec![h.join(".gradle/caches")], refs: Some(refs), detect_sensitive_files: true, min_confidence: None, detect_active_usage: false };
     let caches = scan_global_caches(&env_linux(h), &ctx, &AtomicBool::new(false), |_| {}, |_| {});
     let plat = caches.iter().find(|c| c.id == "android-platforms").unwrap();
     assert!(plat.parts_only && plat.references_checked);

@@ -18,8 +18,66 @@ pub struct TrashEntry {
     /// Unix seconds when it was moved to the Trash.
     pub deleted_at: u64,
     pub bytes: u64,
-    /// Unix seconds when it will be removed automatically; None when auto-clear is off.
+    /// Unix seconds when it will be removed automatically; None when auto-clear is off or the
+    /// item is kept.
     pub expires_at: Option<u64>,
+    /// A per-item override of the retention period.
+    #[serde(default)]
+    pub hold: Option<Hold>,
+}
+
+/// Keep one item longer than the retention period (or for good) until the user deletes it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind", content = "until")]
+pub enum Hold {
+    Forever,
+    /// Unix seconds.
+    Until(u64),
+}
+
+/// Per-item holds, keyed by original path and the time it was moved to the Trash (Trash ids
+/// change between platforms and sessions; this pair does not).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Holds(pub std::collections::BTreeMap<String, Hold>);
+
+impl Holds {
+    pub fn key(original: &str, deleted_at: u64) -> String {
+        format!("{}@{deleted_at}", norm(original))
+    }
+    pub fn load(path: &std::path::Path) -> Holds {
+        std::fs::read_to_string(path).ok().and_then(|t| serde_json::from_str(&t).ok()).unwrap_or_default()
+    }
+    pub fn save(&self, path: &std::path::Path) -> std::io::Result<()> {
+        if let Some(d) = path.parent() {
+            std::fs::create_dir_all(d)?;
+        }
+        std::fs::write(path, serde_json::to_string_pretty(self).unwrap_or_default())
+    }
+    pub fn get(&self, original: &str, deleted_at: u64) -> Option<Hold> {
+        self.0.get(&Holds::key(original, deleted_at)).copied()
+    }
+    /// Set (or clear, with None) the hold of the listed entries, and forget holds of items that
+    /// are no longer in the Trash.
+    pub fn set(&mut self, entries: &[TrashEntry], ids: &[String], hold: Option<Hold>) {
+        let live: std::collections::BTreeSet<String> = entries.iter().map(|e| Holds::key(&e.original_path, e.deleted_at)).collect();
+        self.0.retain(|k, _| live.contains(k));
+        for e in entries.iter().filter(|e| ids.contains(&e.id)) {
+            let k = Holds::key(&e.original_path, e.deleted_at);
+            match hold {
+                Some(h) => self.0.insert(k, h),
+                None => self.0.remove(&k),
+            };
+        }
+    }
+}
+
+/// When an item is cleared automatically, taking its hold into account.
+pub fn expiry(deleted_at: u64, retention_days: u32, hold: Option<Hold>) -> Option<u64> {
+    match hold {
+        Some(Hold::Forever) => None,
+        Some(Hold::Until(t)) => Some(t),
+        None => expires_at(deleted_at, retention_days),
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -88,16 +146,21 @@ mod imp {
             .collect())
     }
 
-    pub fn list(history: &[HistoryEntry], retention_days: u32) -> Result<Vec<TrashEntry>, String> {
+    pub fn list(history: &[HistoryEntry], retention_days: u32, holds: &Holds) -> Result<Vec<TrashEntry>, String> {
         let mut v: Vec<TrashEntry> = mine(history)?
             .into_iter()
-            .map(|(it, deleted_at, bytes)| TrashEntry {
-                id: it.id.to_string_lossy().into_owned(),
-                name: it.name.to_string_lossy().into_owned(),
-                original_path: it.original_path().to_string_lossy().into_owned(),
-                deleted_at,
-                bytes,
-                expires_at: expires_at(deleted_at, retention_days),
+            .map(|(it, deleted_at, bytes)| {
+                let original_path = it.original_path().to_string_lossy().into_owned();
+                let hold = holds.get(&original_path, deleted_at);
+                TrashEntry {
+                    id: it.id.to_string_lossy().into_owned(),
+                    name: it.name.to_string_lossy().into_owned(),
+                    original_path,
+                    deleted_at,
+                    bytes,
+                    expires_at: expiry(deleted_at, retention_days, hold),
+                    hold,
+                }
             })
             .collect();
         v.sort_by(|a, b| b.deleted_at.cmp(&a.deleted_at));
@@ -135,7 +198,7 @@ mod imp {
 mod imp {
     use super::*;
     const MSG: &str = "Managing the Trash from the app is not available on macOS";
-    pub fn list(_: &[HistoryEntry], _: u32) -> Result<Vec<TrashEntry>, String> { Err(MSG.into()) }
+    pub fn list(_: &[HistoryEntry], _: u32, _: &Holds) -> Result<Vec<TrashEntry>, String> { Err(MSG.into()) }
     pub fn restore(_: &[HistoryEntry], _: &[String]) -> Result<Vec<TrashOutcome>, String> { Err(MSG.into()) }
     pub fn purge(_: &[HistoryEntry], _: &[String]) -> Result<Vec<TrashOutcome>, String> { Err(MSG.into()) }
 }
@@ -161,8 +224,8 @@ pub fn restore_check(original: &std::path::Path) -> Result<(), String> {
 }
 
 /// Items Dev Cleaner moved to the Trash, newest first.
-pub fn list(history: &[HistoryEntry], retention_days: u32) -> Result<Vec<TrashEntry>, String> {
-    imp::list(history, retention_days)
+pub fn list(history: &[HistoryEntry], retention_days: u32, holds: &Holds) -> Result<Vec<TrashEntry>, String> {
+    imp::list(history, retention_days, holds)
 }
 
 /// Put items back where they came from. Fails per item if the original place is taken.
@@ -175,18 +238,20 @@ pub fn purge(history: &[HistoryEntry], ids: &[String]) -> Result<Vec<TrashOutcom
     imp::purge(history, ids)
 }
 
-/// Delete every item older than the retention period. Returns what was removed.
-pub fn purge_expired(history: &[HistoryEntry], retention_days: u32, now: u64) -> Result<Vec<TrashOutcome>, String> {
-    if retention_days == 0 || !supported() {
+/// Delete every item whose time is up (the retention period, or its own hold). Returns what was
+/// removed.
+pub fn purge_expired(history: &[HistoryEntry], retention_days: u32, holds: &Holds, now: u64) -> Result<Vec<TrashOutcome>, String> {
+    if !supported() || (retention_days == 0 && !holds.0.values().any(|h| matches!(h, Hold::Until(_)))) {
         return Ok(vec![]);
     }
-    let ids: Vec<String> = list(history, retention_days)?
-        .into_iter()
-        .filter(|e| is_expired(e.deleted_at, retention_days, now))
-        .map(|e| e.id)
-        .collect();
+    let ids: Vec<String> = due(&list(history, retention_days, holds)?, now);
     if ids.is_empty() {
         return Ok(vec![]);
     }
     purge(history, &ids)
+}
+
+/// Entries whose automatic clear time has passed.
+pub fn due(entries: &[TrashEntry], now: u64) -> Vec<String> {
+    entries.iter().filter(|e| e.expires_at.is_some_and(|t| now >= t)).map(|e| e.id.clone()).collect()
 }

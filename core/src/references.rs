@@ -161,17 +161,45 @@ impl Refs {
 
     /// Usage of one part of a global location, or `None` when the location has no references.
     pub fn usage_of(&self, cache_id: &str, part: &str) -> Option<Usage> {
+        let (map, unpinned) = self.family(cache_id)?;
+        Some(self.usage(map, |k| key_matches(cache_id, k, part), unpinned))
+    }
+
+    /// The versions projects ask for in one global location, and the projects that do not pin one.
+    pub fn family(&self, cache_id: &str) -> Option<(&BTreeMap<String, BTreeSet<String>>, Option<&BTreeSet<String>>)> {
         Some(match cache_id {
-            "rustup-toolchains" => self.usage(&self.rust, |c| part == c || part.starts_with(&format!("{c}-")), None),
-            "android-platforms" => {
-                let level = part.strip_prefix("android-").and_then(first_int).unwrap_or_default();
-                self.usage(&self.android_platforms, |k| k == level, Some(&self.android_platform_unpinned))
-            }
-            "android-build-tools" => self.usage(&self.android_build_tools, |k| k == part, Some(&self.android_build_tools_unpinned)),
-            "android-ndk" => self.usage(&self.android_ndk, |k| k == part, Some(&self.android_ndk_unpinned)),
-            id if id.starts_with("fvm-versions") => self.usage(&self.fvm, |k| part == k || part.starts_with(&format!("{k}@")), None),
-            "gradle-wrapper" => self.usage(&self.gradle, |k| part.starts_with(&format!("gradle-{k}-")), None),
+            "rustup-toolchains" => (&self.rust, None),
+            "android-platforms" => (&self.android_platforms, Some(&self.android_platform_unpinned)),
+            "android-build-tools" => (&self.android_build_tools, Some(&self.android_build_tools_unpinned)),
+            "android-ndk" => (&self.android_ndk, Some(&self.android_ndk_unpinned)),
+            id if id.starts_with("fvm-versions") => (&self.fvm, None),
+            "gradle-wrapper" => (&self.gradle, None),
             _ => return None,
         })
+    }
+}
+
+/// Global locations whose parts are matched against project references.
+pub const REFERENCED_LOCATIONS: &[&str] = &["rustup-toolchains", "android-platforms", "android-build-tools", "android-ndk", "fvm-versions", "gradle-wrapper"];
+
+/// Does a version a project asks for (`key`) name this installed part?
+pub fn key_matches(cache_id: &str, key: &str, part: &str) -> bool {
+    match cache_id {
+        "rustup-toolchains" => part == key || part.starts_with(&format!("{key}-")),
+        "android-platforms" => part.strip_prefix("android-").and_then(first_int).is_some_and(|l| l == key),
+        "android-build-tools" | "android-ndk" => part == key,
+        id if id.starts_with("fvm-versions") => part == key || part.starts_with(&format!("{key}@")),
+        "gradle-wrapper" => part.starts_with(&format!("gradle-{key}-")),
+        _ => false,
+    }
+}
+
+/// How a requested version is shown when it is not installed.
+pub fn key_label(cache_id: &str, key: &str) -> String {
+    match cache_id {
+        "android-platforms" => format!("android-{key}"),
+        "gradle-wrapper" => format!("Gradle {key}"),
+        id if id.starts_with("fvm-versions") => format!("Flutter {key}"),
+        _ => key.to_string(),
     }
 }
