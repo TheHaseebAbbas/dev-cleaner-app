@@ -79,6 +79,12 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
 
   return (
     <div className="mx-auto h-full max-w-3xl space-y-4 overflow-auto pb-6">
+      <Section icon="eye" title="Appearance" description="How the app looks.">
+        <Field label="Theme" hint="System follows your operating system.">
+          <Segmented value={s.theme} onChange={(v) => set("theme", v)} options={[{ value: "system", label: "System" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} />
+        </Field>
+      </Section>
+
       <Section icon="sliders" title="Cleaning" description="What happens when you press Clean.">
         <Field label="When removing" hint="Trash lets you put things back. Permanent frees the space at once.">
           <Segmented value={s.delete_mode} onChange={(v) => set("delete_mode", v)} options={[{ value: "trash", label: "Move to Trash" }, { value: "permanent", label: "Delete permanently" }]} />
@@ -131,12 +137,6 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
           </div>
           <button className="btn mt-2" onClick={addCustom} disabled={!draft.name.trim() || !draft.dirs.trim()}><Icon name="plus" />Add rule</button>
         </div>
-      </Section>
-
-      <Section icon="eye" title="Appearance" description="How the app looks.">
-        <Field label="Theme" hint="System follows your operating system.">
-          <Segmented value={s.theme} onChange={(v) => set("theme", v)} options={[{ value: "system", label: "System" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} />
-        </Field>
       </Section>
     </div>
   );

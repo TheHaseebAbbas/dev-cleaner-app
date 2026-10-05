@@ -14,6 +14,13 @@ Settings save automatically a moment after you change them. Open the **Settings*
 
 ## Every setting
 
+Sections appear in this order in the app.
+
+### Appearance
+| Setting | Default | Notes |
+| --- | --- | --- |
+| **Theme** (`theme`) | System | System follows your OS dark/light setting. |
+
 ### Cleaning
 | Setting | Default | What it does | Best value |
 | --- | --- | --- | --- |
@@ -40,11 +47,6 @@ Note on Trash: on a drive with little free space, Trash does not free anything u
 
 ### Cleanup rules
 Each rule can be switched on or off. A switched-off rule is never matched. The built-in list is in [Rules and locations](RULES.md). Rules for the tools you do not use cost nothing, but turning them off keeps the list focused.
-
-### Appearance
-| Setting | Default | Notes |
-| --- | --- | --- |
-| **Theme** (`theme`) | System | System follows your OS dark/light setting. |
 
 ## Recommended setups by tech stack
 Scan folder: the folder that holds your projects. Everything below is optional tuning.
