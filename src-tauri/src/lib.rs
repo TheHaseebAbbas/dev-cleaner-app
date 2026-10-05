@@ -1,12 +1,16 @@
 use dev_cleaner_core::{
+    analytics::{self, Analytics},
     cleaner::{DeleteReport, OutcomeKind},
+    graph::{self, DependencyGraph},
+    ruletest::{self, RuleTestResult},
+    schedule::{self, RunSummary, Schedule, ScheduleAction, ScheduleState},
     global::{self, GlobalCache, GlobalContext},
     history::{self, HistoryEntry, Operation, ScanRecord},
     plan::{self, Preview},
     rules::Rule,
     scanner::{self, now_secs, new_scan_id, Item, ScanOptions, ScanSummary},
-    settings::Settings,
-    trash_bin::{self, TrashEntry, TrashOutcome},
+    settings::{DeleteMode, Settings},
+    trash_bin::{self, Hold, Holds, TrashEntry, TrashOutcome},
 };
 use std::{
     path::PathBuf,
@@ -60,7 +64,16 @@ fn list_rules(app: AppHandle) -> Result<Vec<Rule>, String> {
 }
 
 #[tauri::command]
-fn start_scan(app: AppHandle, state: State<'_, AppState>, roots: Option<Vec<PathBuf>>) -> Result<(), String> {
+fn start_scan(app: AppHandle, roots: Option<Vec<PathBuf>>) -> Result<(), String> {
+    spawn_project_scan(app, roots, None)
+}
+
+type AfterScan = Box<dyn FnOnce(&AppHandle, &[Item], &ScanSummary) + Send>;
+
+/// Runs a project scan on a worker thread, streaming items to the UI. `after` runs once the
+/// scan has become the current one (used by the scheduled cleanup).
+fn spawn_project_scan(app: AppHandle, roots: Option<Vec<PathBuf>>, after: Option<AfterScan>) -> Result<(), String> {
+    let state = app.state::<AppState>();
     if state.scanning.swap(true, Ordering::SeqCst) {
         return Err("a scan is already running".into());
     }
@@ -100,13 +113,16 @@ fn start_scan(app: AppHandle, state: State<'_, AppState>, roots: Option<Vec<Path
             let _ = history::record_scan(&f, "projects", &summary, total, reclaim);
         }
         let st = app.state::<AppState>();
-        *st.items.lock().unwrap() = items;
+        *st.items.lock().unwrap() = items.clone();
         *st.summary.lock().unwrap() = Some(summary.clone());
         if summary.complete {
             *st.last_complete.lock().unwrap() = Some(summary.clone());
         }
         scanning.store(false, Ordering::SeqCst);
-        let _ = app.emit("scan-done", summary);
+        let _ = app.emit("scan-done", summary.clone());
+        if let Some(f) = after {
+            f(&app, &items, &summary);
+        }
     });
     Ok(())
 }
@@ -127,7 +143,8 @@ fn preview_cleanup(app: AppHandle, state: State<'_, AppState>, scan_id: String, 
     let settings = Settings::load(&settings_path(&app)?);
     let items = state.items.lock().unwrap().clone();
     let summary = state.summary.lock().unwrap().clone();
-    let planned = plan::resolve_items(&items, summary.as_ref(), &scan_id, &ids, true);
+    let mut planned = plan::resolve_items(&items, summary.as_ref(), &scan_id, &ids, true);
+    plan::annotate(&mut planned, settings.detect_active_usage, &settings.unconfirmed_custom_rules());
     Ok(plan::preview(&planned, summary.as_ref(), &settings.protected_paths))
 }
 
@@ -137,6 +154,25 @@ fn log_report(app: &AppHandle, report: &DeleteReport) -> Result<(), String> {
     history::record_operation(&data_file(app, "operations.jsonl")?, report).map_err(|e| e.to_string())
 }
 
+/// A custom rule needs confirmation only until it has cleaned something for real once.
+fn confirm_rules_used(app: &AppHandle, report: &DeleteReport) {
+    if report.dry_run {
+        return;
+    }
+    let Ok(path) = settings_path(app) else { return };
+    let mut s = Settings::load(&path);
+    let mut changed = false;
+    for r in s.custom_rules.iter_mut().filter(|r| !r.confirmed) {
+        if report.outcomes.iter().any(|o| o.result == OutcomeKind::Removed && o.rule_id == r.id) {
+            r.confirmed = true;
+            changed = true;
+        }
+    }
+    if changed {
+        let _ = s.save(&path);
+    }
+}
+
 /// Deletes items (or parts) from the current, complete project scan by id. Every target is
 /// checked again right before it is removed; `acknowledged` must be true for dangerous ones.
 #[tauri::command]
@@ -144,9 +180,11 @@ fn delete_items(app: AppHandle, state: State<'_, AppState>, scan_id: String, ids
     let settings = Settings::load(&settings_path(&app)?);
     let items = state.items.lock().unwrap().clone();
     let summary = state.summary.lock().unwrap().clone();
-    let planned = plan::resolve_items(&items, summary.as_ref(), &scan_id, &ids, settings.dry_run);
+    let mut planned = plan::resolve_items(&items, summary.as_ref(), &scan_id, &ids, settings.dry_run);
+    plan::annotate(&mut planned, settings.detect_active_usage, &settings.unconfirmed_custom_rules());
     let report = plan::run(planned, settings.delete_mode, settings.dry_run, acknowledged, &settings.protected_paths);
     log_report(&app, &report)?;
+    confirm_rules_used(&app, &report);
     if !settings.dry_run {
         let gone: Vec<&str> = report.outcomes.iter().filter(|o| o.result == OutcomeKind::Removed).map(|o| o.id.as_str()).collect();
         let mut items = state.items.lock().unwrap();
@@ -187,6 +225,7 @@ fn start_global_scan(app: AppHandle, state: State<'_, AppState>) -> Result<(), S
         refs: state.last_complete.lock().unwrap().as_ref().map(|s| s.refs.clone()),
         detect_sensitive_files: settings.detect_sensitive_files,
         min_confidence: Some(settings.minimum_recommendation_confidence),
+        detect_active_usage: settings.detect_active_usage,
     };
     state.global_cancel.store(false, Ordering::SeqCst);
     state.globals.lock().unwrap().clear();
@@ -253,7 +292,8 @@ fn preview_global_cleanup(app: AppHandle, state: State<'_, AppState>, scan_id: S
     let settings = Settings::load(&settings_path(&app)?);
     let known = state.globals.lock().unwrap().clone();
     let summary = state.global_summary.lock().unwrap().clone();
-    let planned = plan::resolve_globals(&known, summary.as_ref(), &scan_id, &ids, &part_ids, true);
+    let mut planned = plan::resolve_globals(&known, summary.as_ref(), &scan_id, &ids, &part_ids, true);
+    plan::annotate(&mut planned, settings.detect_active_usage, &[]);
     Ok(plan::preview(&planned, summary.as_ref(), &settings.protected_paths))
 }
 
@@ -263,7 +303,8 @@ fn delete_global_caches(app: AppHandle, state: State<'_, AppState>, scan_id: Str
     let settings = Settings::load(&settings_path(&app)?);
     let known = state.globals.lock().unwrap().clone();
     let summary = state.global_summary.lock().unwrap().clone();
-    let planned = plan::resolve_globals(&known, summary.as_ref(), &scan_id, &ids, &part_ids, settings.dry_run);
+    let mut planned = plan::resolve_globals(&known, summary.as_ref(), &scan_id, &ids, &part_ids, settings.dry_run);
+    plan::annotate(&mut planned, settings.detect_active_usage, &[]);
     let report = plan::run(planned, settings.delete_mode, settings.dry_run, acknowledged, &settings.protected_paths);
     log_report(&app, &report)?;
     Ok(report)
@@ -385,7 +426,20 @@ fn trash_info(app: AppHandle) -> Result<TrashInfo, String> {
 #[tauri::command]
 fn trash_list(app: AppHandle) -> Result<Vec<TrashEntry>, String> {
     let s = Settings::load(&settings_path(&app)?);
-    trash_bin::list(&history::load(&history_path(&app)?), s.trash_retention_days)
+    trash_bin::list(&history::load(&history_path(&app)?), s.trash_retention_days, &Holds::load(&data_file(&app, "trash_holds.json")?))
+}
+
+/// Keep items in the Trash longer than the retention period (`hold` None restores the default).
+#[tauri::command]
+fn trash_set_hold(app: AppHandle, ids: Vec<String>, hold: Option<Hold>) -> Result<Vec<TrashEntry>, String> {
+    let s = Settings::load(&settings_path(&app)?);
+    let file = data_file(&app, "trash_holds.json")?;
+    let history = history::load(&history_path(&app)?);
+    let mut holds = Holds::load(&file);
+    let entries = trash_bin::list(&history, s.trash_retention_days, &holds)?;
+    holds.set(&entries, &ids, hold);
+    holds.save(&file).map_err(|e| e.to_string())?;
+    trash_bin::list(&history, s.trash_retention_days, &holds)
 }
 
 #[tauri::command]
@@ -406,7 +460,8 @@ fn trash_clear_expired(app: AppHandle) -> Result<Vec<TrashOutcome>, String> {
 
 fn run_trash_expiry(app: &AppHandle) -> Result<Vec<TrashOutcome>, String> {
     let s = Settings::load(&settings_path(app)?);
-    let out = trash_bin::purge_expired(&history::load(&history_path(app)?), s.trash_retention_days, now_secs())?;
+    let holds = Holds::load(&data_file(app, "trash_holds.json")?);
+    let out = trash_bin::purge_expired(&history::load(&history_path(app)?), s.trash_retention_days, &holds, now_secs())?;
     if out.iter().any(|o| o.ok) {
         let _ = app.emit("trash-changed", ());
     }
@@ -437,6 +492,116 @@ fn home() -> Option<PathBuf> {
     std::env::var_os("HOME").or_else(|| std::env::var_os("USERPROFILE")).map(PathBuf::from)
 }
 
+fn schedule_file(app: &AppHandle) -> Result<PathBuf, String> {
+    data_file(app, "schedule.json")
+}
+
+#[derive(serde::Serialize)]
+struct ScheduleStatus {
+    schedule: Schedule,
+    last_run: u64,
+    next_run: Option<u64>,
+    last_result: Option<RunSummary>,
+}
+
+#[tauri::command]
+fn get_schedule_status(app: AppHandle) -> Result<ScheduleStatus, String> {
+    let s = Settings::load(&settings_path(&app)?);
+    let st = ScheduleState::load(&schedule_file(&app)?);
+    let base = if st.last_run == 0 { now_secs() } else { st.last_run };
+    Ok(ScheduleStatus { next_run: schedule::next_run(&s.schedule, base), schedule: s.schedule, last_run: st.last_run, last_result: st.last_result })
+}
+
+/// Run the scheduled scan (and cleanup, if configured) now.
+#[tauri::command]
+fn run_schedule_now(app: AppHandle) -> Result<(), String> {
+    schedule_tick(&app, true)
+}
+
+/// Starts a scheduled run when it is due (or `force`d). The run is an ordinary project scan the
+/// UI sees streaming in; afterwards, eligible items are listed (Remind) or moved to the Trash
+/// (Clean). Nothing that needs a confirmation is ever touched.
+fn schedule_tick(app: &AppHandle, force: bool) -> Result<(), String> {
+    let settings = Settings::load(&settings_path(app)?);
+    let file = schedule_file(app)?;
+    let mut st = ScheduleState::load(&file);
+    let now = now_secs();
+    if !force {
+        if !settings.schedule.enabled {
+            return Ok(());
+        }
+        // The interval counts from when the schedule was first seen on, not from 1970.
+        if st.last_run == 0 {
+            st.last_run = now;
+            return st.save(&file).map_err(|e| e.to_string());
+        }
+        if !schedule::is_due(&settings.schedule, st.last_run, now) {
+            return Ok(());
+        }
+    }
+    let sched = settings.schedule.clone();
+    let after: AfterScan = Box::new(move |app, items, summary| {
+        let mut r = RunSummary { timestamp: now_secs(), action: sched.action, dry_run: settings.dry_run, ..Default::default() };
+        if !summary.complete {
+            r.error = Some("The scan was stopped before it finished.".into());
+        } else {
+            let ids: Vec<String> = items.iter().filter(|i| schedule::eligible(i, &sched.profile)).map(|i| i.id.clone()).collect();
+            r.matched = ids.len();
+            r.matched_bytes = items.iter().filter(|i| ids.contains(&i.id)).map(|i| i.reclaimable_bytes).sum();
+            if sched.action == ScheduleAction::Clean && !ids.is_empty() {
+                let mut planned = plan::resolve_items(items, Some(summary), &summary.scan_id, &ids, settings.dry_run);
+                plan::annotate(&mut planned, settings.detect_active_usage, &settings.unconfirmed_custom_rules());
+                // Unattended: always the Trash, never acknowledged.
+                let report = plan::run(planned, DeleteMode::Trash, settings.dry_run, false, &settings.protected_paths);
+                let _ = log_report(app, &report);
+                let removed: Vec<&str> = report.outcomes.iter().filter(|o| o.result == OutcomeKind::Removed).map(|o| o.id.as_str()).collect();
+                r.removed = removed.len();
+                r.removed_bytes = report.outcomes.iter().filter(|o| o.result == OutcomeKind::Removed).map(|o| o.estimated_bytes).sum();
+                r.skipped = report.outcomes.len() - removed.len();
+                if !settings.dry_run {
+                    app.state::<AppState>().items.lock().unwrap().retain(|i| !removed.contains(&i.id.as_str()));
+                }
+            }
+        }
+        if let Ok(f) = schedule_file(app) {
+            let mut st = ScheduleState::load(&f);
+            st.last_result = Some(r.clone());
+            let _ = st.save(&f);
+        }
+        let _ = app.emit("schedule-done", r);
+    });
+    match spawn_project_scan(app.clone(), None, Some(after)) {
+        Ok(()) => {
+            st.last_run = now;
+            st.save(&file).map_err(|e| e.to_string())?;
+            let _ = app.emit("schedule-started", ());
+            Ok(())
+        }
+        // A scan is already running: try again at the next check.
+        Err(_) if !force => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
+#[tauri::command]
+fn test_rule(app: AppHandle, rule: Rule) -> Result<RuleTestResult, String> {
+    let settings = Settings::load(&settings_path(&app)?);
+    Ok(ruletest::test_rule(rule, &settings, &AtomicBool::new(false)))
+}
+
+#[tauri::command]
+fn get_dependency_graph(state: State<'_, AppState>) -> DependencyGraph {
+    let refs = state.last_complete.lock().unwrap().as_ref().map(|s| s.refs.clone());
+    graph::build(refs.as_ref(), &state.globals.lock().unwrap())
+}
+
+#[tauri::command]
+fn get_analytics(app: AppHandle) -> Result<Analytics, String> {
+    let h = history::load(&history_path(&app)?);
+    let scans: Vec<ScanRecord> = history::load_lines(&data_file(&app, "scans.jsonl")?);
+    Ok(analytics::compute(&h, &scans, now_secs(), 12))
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
@@ -448,12 +613,22 @@ pub fn run() {
                 let _ = run_trash_expiry(&handle);
                 std::thread::sleep(std::time::Duration::from_secs(3600));
             });
+            // Scheduled cleanup (off by default): check a little after start, then every 30 minutes.
+            let handle = app.handle().clone();
+            std::thread::spawn(move || {
+                std::thread::sleep(std::time::Duration::from_secs(120));
+                loop {
+                    let _ = schedule_tick(&handle, false);
+                    std::thread::sleep(std::time::Duration::from_secs(1800));
+                }
+            });
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
             get_settings, save_settings, list_rules, start_scan, cancel_scan, preview_cleanup, delete_items,
             get_items, get_locations, start_global_scan, cancel_global_scan, get_globals, preview_global_cleanup, delete_global_caches,
-            get_diagnostics, get_history, reveal_path, disk_space, trash_info, trash_list, trash_restore, trash_purge, trash_clear_expired, open_trash
+            get_diagnostics, get_history, reveal_path, disk_space, trash_info, trash_list, trash_restore, trash_purge, trash_clear_expired, open_trash,
+            trash_set_hold, test_rule, get_dependency_graph, get_analytics, get_schedule_status, run_schedule_now
         ])
         .run(tauri::generate_context!())
         .expect("error while running Dev Cleaner");

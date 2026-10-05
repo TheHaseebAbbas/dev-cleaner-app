@@ -142,6 +142,10 @@ pub struct Target {
     pub allow_file: bool,
     /// Removed together with the target when it succeeds (e.g. an emulator's .ini).
     pub companions: Vec<PathBuf>,
+    /// Set right before removal when a running program uses it ("In use by ...").
+    pub in_use: Option<String>,
+    /// Matched by a custom rule that has never been used to clean before.
+    pub first_use_rule: bool,
 }
 
 /// Refuse anything that is not an existing directory, is a filesystem root, home, system or
@@ -208,6 +212,12 @@ pub fn validate(t: &Target, acknowledged: bool, protected: &[PathBuf]) -> Result
         if let Some(why) = safety::fingerprint_changed(fp, &t.path) {
             return Err((ErrorCode::TargetChanged, format!("It changed since the scan ({why}). Rescan before cleaning it.")));
         }
+    }
+    if let Some(why) = t.in_use.as_ref().filter(|_| !acknowledged) {
+        return Err((ErrorCode::InUse, format!("{why}. Close it first, or confirm to remove it anyway.")));
+    }
+    if t.first_use_rule && !acknowledged {
+        return Err((ErrorCode::NeedsAcknowledgement, format!("Your custom rule \"{}\" has not been used to clean before. Confirm to continue.", t.rule_id)));
     }
     if t.needs_ack && !acknowledged {
         return Err((ErrorCode::NeedsAcknowledgement, "This may remove something you need. Confirm the warning to continue.".into()));

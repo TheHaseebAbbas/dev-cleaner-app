@@ -53,6 +53,14 @@ pub struct Settings {
     pub require_rescan_before_cleanup: bool,
     /// Advanced: custom rules may be marked dangerous.
     pub allow_danger_custom_rules: bool,
+    /// Look for running processes and locked files that use a folder.
+    pub detect_active_usage: bool,
+    /// Show estimated reclaimable space.
+    pub show_reclaim_estimate: bool,
+    /// Show how much may have to be downloaded again.
+    pub show_network_recovery_cost: bool,
+    /// Scheduled scan and cleanup (off by default).
+    pub schedule: crate::schedule::Schedule,
 }
 
 impl Default for Settings {
@@ -82,6 +90,10 @@ impl Default for Settings {
             stale_scan_minutes: 10,
             require_rescan_before_cleanup: false,
             allow_danger_custom_rules: false,
+            detect_active_usage: true,
+            show_reclaim_estimate: true,
+            show_network_recovery_cost: true,
+            schedule: crate::schedule::Schedule::default(),
         }
     }
 }
@@ -113,6 +125,12 @@ impl Settings {
         rules
     }
 
+    /// Custom rules that have not been used in a real cleanup yet; their first cleanup asks for
+    /// an explicit confirmation.
+    pub fn unconfirmed_custom_rules(&self) -> Vec<String> {
+        self.custom_rules.iter().filter(|r| !r.confirmed).map(|r| r.id.clone()).collect()
+    }
+
     /// Inside a protected path, or containing one (component-aware, normalised).
     pub fn is_protected(&self, path: &Path) -> bool {
         crate::safety::within_any(path, &self.protected_paths).is_some() || crate::safety::contains_any(path, &self.protected_paths).is_some()
@@ -124,6 +142,7 @@ impl Settings {
             detect_sensitive_files: self.detect_sensitive_files,
             activity_mode: self.activity_mode,
             min_confidence: self.minimum_recommendation_confidence,
+            detect_active_usage: self.detect_active_usage,
         }
     }
 

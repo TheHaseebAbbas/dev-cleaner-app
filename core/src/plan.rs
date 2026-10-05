@@ -58,7 +58,7 @@ pub fn resolve_items(items: &[Item], summary: Option<&ScanSummary>, scan_id: &st
                     needs_ack: needs_ack(i.risk, &i.warnings),
                     block: i.block.clone(),
                     allow_file: false,
-                    companions: vec![],
+                    ..Default::default()
                 },
                 size: i.disk_bytes,
                 reclaimable: i.reclaimable_bytes,
@@ -86,7 +86,7 @@ pub fn resolve_items(items: &[Item], summary: Option<&ScanSummary>, scan_id: &st
                     needs_ack: needs_ack(risk, &i.warnings),
                     block: p.block.clone().or_else(|| i.block.clone()),
                     allow_file: p.is_file,
-                    companions: vec![],
+                    ..Default::default()
                 },
                 size: p.disk_bytes,
                 reclaimable: p.reclaimable_bytes,
@@ -127,7 +127,7 @@ pub fn resolve_globals(caches: &[GlobalCache], summary: Option<&ScanSummary>, sc
             needs_ack: needs_ack(c.risk, &c.warnings) || c.parts.iter().any(|p| p.warning.as_ref().is_some_and(|w| w.level == Level::Danger)),
             block: c.block.clone(),
             allow_file: false,
-            companions: vec![],
+            ..Default::default()
         };
         if c.info_only {
             out.push(Err(DeleteOutcome::refused(&target, ErrorCode::ViewOnly, "View only: this cannot be removed from here.", dry_run)));
@@ -164,6 +164,7 @@ pub fn resolve_globals(caches: &[GlobalCache], summary: Option<&ScanSummary>, sc
             needs_ack: needs_ack(risk, &warnings),
             block: p.block.clone().or_else(|| c.block.clone()),
             allow_file: p.is_file,
+            ..Default::default()
         };
         if c.info_only {
             out.push(Err(DeleteOutcome::refused(&target, ErrorCode::ViewOnly, "View only: this cannot be removed from here.", dry_run)));
@@ -180,6 +181,27 @@ pub fn resolve_globals(caches: &[GlobalCache], summary: Option<&ScanSummary>, sc
         }));
     }
     out
+}
+
+/// Checks that depend on the moment of cleaning rather than on the scan: programs using a
+/// target right now (one process snapshot for the whole run) and custom rules that have never
+/// cleaned before. Both make the target need explicit confirmation.
+pub fn annotate(planned: &mut [Result<Planned, DeleteOutcome>], detect_in_use: bool, unconfirmed_rules: &[String]) {
+    let snap = if detect_in_use { crate::inuse::Snapshot::take() } else { None };
+    for p in planned.iter_mut().flatten() {
+        if let Some(s) = &snap {
+            let mut u = s.check(&p.target.path, &p.target.rule_id);
+            if p.target.rule_id == "temp-win" {
+                u = crate::inuse::with_locks(u, crate::inuse::locked_files(&p.target.path, 200));
+            }
+            if u.in_use() {
+                p.target.in_use = Some(u.describe());
+            }
+        }
+        if unconfirmed_rules.contains(&p.target.rule_id) {
+            p.target.first_use_rule = true;
+        }
+    }
 }
 
 /// What a cleanup would do, checked against the disk right now. Nothing is touched.
@@ -203,6 +225,12 @@ pub struct Preview {
     pub keep: usize,
     /// Selected things a scanned project still uses.
     pub in_use: usize,
+    /// Selected things a running program uses right now.
+    #[serde(default)]
+    pub running: usize,
+    /// Custom rules (ids) used to clean for the first time.
+    #[serde(default)]
+    pub first_use_rules: Vec<String>,
     pub scan_age_secs: u64,
     pub volume_free: Option<u64>,
     /// Per-target problems found now (only refusals are listed).
@@ -226,6 +254,14 @@ pub fn preview(planned: &[Result<Planned, DeleteOutcome>], summary: Option<&Scan
                 }
                 if pl.in_use {
                     p.in_use += 1;
+                }
+                if pl.target.in_use.is_some() {
+                    p.running += 1;
+                    p.needs_ack = true;
+                }
+                if pl.target.first_use_rule && !p.first_use_rules.contains(&pl.target.rule_id) {
+                    p.first_use_rules.push(pl.target.rule_id.clone());
+                    p.needs_ack = true;
                 }
                 match cleaner::validate(&pl.target, true, protected) {
                     Ok(()) => {

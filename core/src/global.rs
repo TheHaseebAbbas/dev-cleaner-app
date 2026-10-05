@@ -5,6 +5,7 @@
 //! what recovering it costs, and how it may be cleaned (whole, part by part, or view only).
 //! Locations are resolved per OS (home folder, `%LOCALAPPDATA%`, the Android SDK root).
 
+use crate::inuse::{self, ActiveUse, Snapshot};
 use crate::model::{Block, BlockSource, Category, Confidence, Cost, Fingerprint, GitStatus, Level, Recommendation, Risk, Usage, Verdict, Warning};
 use crate::recommend::{self, Facts};
 use crate::references::Refs;
@@ -54,6 +55,9 @@ pub struct GlobalCache {
     /// True when parts were checked against the projects from the last project scan.
     pub references_checked: bool,
     pub fingerprint: Fingerprint,
+    /// Running processes or locked files (when active-use detection is on).
+    #[serde(default)]
+    pub in_use: Option<ActiveUse>,
 }
 
 /// A place that is looked at, without measuring it (cheap; used by the "where it looks" dialog).
@@ -340,6 +344,8 @@ pub struct GlobalContext {
     pub refs: Option<Refs>,
     pub detect_sensitive_files: bool,
     pub min_confidence: Option<Confidence>,
+    /// Check running processes (and locked files on Windows) before recommending anything.
+    pub detect_active_usage: bool,
 }
 
 pub fn list_global_caches() -> Vec<GlobalCache> {
@@ -395,6 +401,8 @@ fn wsl_distros(env: &Env, scan_id: &str) -> Option<GlobalCache> {
                     recommendation: None,
                     is_file: true,
                     fingerprint: Fingerprint::default(),
+                    in_use: None,
+                    activity: None,
                 });
             }
         }
@@ -430,6 +438,7 @@ fn wsl_distros(env: &Env, scan_id: &str) -> Option<GlobalCache> {
         recommendation: Recommendation { verdict: Verdict::Blocked, score: 0, reasons: vec![crate::model::Reason::no(block.reason.clone())] },
         block: Some(block),
         references_checked: false,
+        in_use: None,
         fingerprint: Fingerprint::default(),
     })
 }
@@ -438,7 +447,7 @@ fn download(cat: Category, net: Cost, bytes: u64) -> u64 {
     if net >= Cost::Medium && net != Cost::Unknown { (bytes as f64 * cat.download_factor()) as u64 } else { 0 }
 }
 
-fn measure(t: &Def, path: PathBuf, env: &Env, ctx: &GlobalContext) -> GlobalCache {
+fn measure(t: &Def, path: PathBuf, env: &Env, ctx: &GlobalContext, snap: Option<&Snapshot>) -> GlobalCache {
     let exists = path.is_dir();
     let now = now_secs();
     let filtered = !t.allow.is_empty() || !t.allow_prefix.is_empty();
@@ -485,6 +494,18 @@ fn measure(t: &Def, path: PathBuf, env: &Env, ctx: &GlobalContext) -> GlobalCach
     if block.is_some() {
         risk = Risk::Blocked;
     }
+    let check_use = |p: &Path| -> Option<ActiveUse> {
+        if !ctx.detect_active_usage || !exists || t.info_only {
+            return None;
+        }
+        let u = snap.map(|s| s.check(p, t.id)).unwrap_or_else(ActiveUse::unknown);
+        // Temp folders: programs hold their files open without running from them.
+        Some(if t.id == "temp-win" { inuse::with_locks(u, inuse::locked_files(p, 200)) } else { u })
+    };
+    let in_use = if t.parts_only { None } else { check_use(&path) };
+    if let Some(u) = in_use.as_ref().filter(|u| u.in_use()) {
+        warnings.push(Warning::danger(format!("{}. Close it before cleaning; files may be locked or recreated while it runs.", u.describe())));
+    }
 
     // Per-part context: protection, the version in use, references, staleness.
     let default_tc = (t.id == "rustup-toolchains").then(|| rustup_default(env)).flatten();
@@ -519,6 +540,10 @@ fn measure(t: &Def, path: PathBuf, env: &Env, ctx: &GlobalContext) -> GlobalCach
                 let why = if claude.is_some() { "This is the version the claude command uses." } else { "Probably the version in use (the newest one)." };
                 p.block = Some(Block::new(BlockSource::Rule, why));
             }
+        }
+        p.in_use = check_use(pp);
+        if let Some(u) = p.in_use.as_ref().filter(|u| u.in_use()) {
+            p.warning = Some(Warning::danger(format!("{}. Close it before removing this.", u.describe())));
         }
         if t.id == "temp-win" && idle(p.last_modified, now).is_some_and(|d| d < TEMP_STALE_DAYS) {
             p.block.get_or_insert(Block::new(BlockSource::Rule, format!("Changed in the last {TEMP_STALE_DAYS} days; a running program may still use it.")));
@@ -578,7 +603,7 @@ fn measure(t: &Def, path: PathBuf, env: &Env, ctx: &GlobalContext) -> GlobalCach
             let n = parts.iter().filter(|p| p.recommendation.as_ref().is_some_and(|r| r.verdict == Verdict::Recommended)).count();
             recommendation.verdict = if n > 0 { Verdict::Review } else { recommendation.verdict.max_keep() };
             recommendation.reasons.push(crate::model::Reason::no(if n > 0 { format!("Only individual parts can be removed; {n} are recommended") } else { "Only individual parts can be removed".into() }));
-        } else if parts.iter().any(|p| p.block.is_some() || matches!(p.usage, Some(Usage::Used { .. }))) {
+        } else if parts.iter().any(|p| p.block.is_some() || matches!(p.usage, Some(Usage::Used { .. })) || p.in_use.as_ref().is_some_and(|u| u.in_use())) {
             recommendation.verdict = Verdict::Keep;
             recommendation.score = recommendation.score.min(30);
             recommendation.reasons.push(crate::model::Reason::no("Some parts are in use; choose parts instead of the whole folder"));
@@ -614,6 +639,7 @@ fn measure(t: &Def, path: PathBuf, env: &Env, ctx: &GlobalContext) -> GlobalCach
         block,
         recommendation,
         references_checked,
+        in_use,
     }
 }
 
@@ -658,6 +684,7 @@ where
     use rayon::prelude::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     let defs: Vec<(&Def, PathBuf)> = defs_for(env).collect();
+    let snap = if ctx.detect_active_usage { Snapshot::take() } else { None };
     let total = defs.len() as u64 + u64::from(env.os == "windows");
     let done = AtomicU64::new(0);
     let mut out: Vec<GlobalCache> = defs
@@ -666,7 +693,7 @@ where
             if cancel.load(Ordering::Relaxed) {
                 return None;
             }
-            let c = measure(t, path, env, ctx);
+            let c = measure(t, path, env, ctx, snap.as_ref());
             if c.exists {
                 on_item(&c);
             }

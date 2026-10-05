@@ -11,10 +11,12 @@ A desktop app that finds and removes the junk developer tools leave behind: `nod
 | Page | What it does |
 | --- | --- |
 | **Projects** | Scans your code folders and lists every rebuildable folder with size, a verdict and its reasons, risk, Git status and warnings. Quick select picks the safe ones for you. Folders made of independent pieces expand into sub-items you can remove one by one. |
-| **Tools & SDKs** | Measures caches and SDKs in your user folder (npm, Cargo, Gradle, Android SDK, Xcode, JetBrains, VS Code caches and more), and shows which SDK and toolchain versions your projects still use. Docker and WSL disks are shown view-only. |
-| **Trash** | Everything Dev Cleaner moved to the Trash, with **Restore** and **Delete forever**, and an auto-clear timer you can change. |
-| **History** | Every cleanup, with the total space reclaimed. |
-| **Settings** | An overview that opens into Appearance, Cleaning, Recommendations, Safety, Scanning, Protection, Rules, Trash and Diagnostics. Also has **About**. |
+| **Tools & SDKs** | Measures caches and SDKs in your user folder (npm, Cargo, Gradle, Android SDK, Xcode, JetBrains, VS Code caches and more), grouped by ecosystem. A **Dependency map** view shows which installed SDK and toolchain versions your projects use, and which they need but are missing. Docker and WSL disks are shown view-only. |
+| **Trash** | Everything Dev Cleaner moved to the Trash, with **Restore** and **Delete forever**, an auto-clear timer, and a per-item **Keep longer** option. |
+| **History** | Every cleanup, with the total space reclaimed and an **Over time** chart of what was reclaimed per month. |
+| **Settings** | An overview that opens into Appearance, Cleaning (with recommendations and scheduled cleanup), Safety, Scanning, Protection, Rules (with a **Test** for custom rules), Trash and About (with diagnostics). |
+
+Folders that a running program uses (a dev server, a Gradle daemon, an emulator, or a locked file on Windows) are marked **In use now** and need confirmation. Folders inside a pnpm, npm, Yarn, Cargo, Gradle, Go, Dart or Melos workspace are grouped under the workspace root.
 
 Both scanning pages show clear states: ready to scan, scanning with live progress, results, nothing found, stopped, and error.
 

@@ -59,6 +59,8 @@ Only matches at or above the *Minimum confidence* setting (default High) can be 
 ### Projects and packages
 The project a folder belongs to is the Git repository root inside your scan folder, or otherwise the topmost folder in an unbroken chain of folders that hold project files. So `app/android/build` belongs to `app`, not `android`. The folder holding the marker file is shown as the *package*.
 
+Workspaces declared by `pnpm-workspace.yaml`, `package.json` `workspaces` (npm and Yarn), `lerna.json`, `Cargo.toml` `[workspace]`, `settings.gradle(.kts)`, `go.work`, Dart `pubspec.yaml` `workspace` or `melos.yaml` are recognised. Members are grouped under the workspace root, and the row says which member a folder belongs to.
+
 ### Nested matches
 Once a folder matches, the scanner does not look inside it. Folders under skipped names (Settings) are never entered. Symlinks, junctions and mount points are never followed.
 

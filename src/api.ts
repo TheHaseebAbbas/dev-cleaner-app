@@ -36,6 +36,23 @@ export interface Recommendation {
   reasons: Reason[];
 }
 
+/** Running programs or locked files (only when active-use detection is on). */
+export interface ActiveUse {
+  status: "in_use" | "not_detected" | "unknown";
+  by: string[];
+  locked_files: number;
+  locked_bytes: number;
+}
+
+/** For parts of split project folders such as Rust `target`. */
+export type PartActivity = "active" | "recent" | "old";
+
+export interface WorkspaceInfo {
+  root: string;
+  kind: string;
+  member: string;
+}
+
 export type Usage =
   | { status: "used"; by: string[] }
   | { status: "unused"; projects_checked: number }
@@ -56,6 +73,8 @@ export interface Part {
   usage?: Usage | null;
   recommendation?: Recommendation | null;
   is_file: boolean;
+  in_use?: ActiveUse | null;
+  activity?: PartActivity | null;
 }
 
 export interface Item {
@@ -91,6 +110,8 @@ export interface Item {
   warnings: Warning[];
   block: Block | null;
   recommendation: Recommendation;
+  workspace?: WorkspaceInfo | null;
+  in_use?: ActiveUse | null;
 }
 
 export interface Rule {
@@ -113,6 +134,15 @@ export interface Rule {
   network_cost?: Cost;
   enabled: boolean;
   custom: boolean;
+  /** Custom rules: false until the rule has cleaned something once (that first time asks for confirmation). */
+  confirmed?: boolean;
+}
+
+export interface Schedule {
+  enabled: boolean;
+  every_days: number;
+  profile: "safe" | "recommended";
+  action: "remind" | "clean";
 }
 
 export interface Settings {
@@ -139,6 +169,10 @@ export interface Settings {
   stale_scan_minutes: number;
   require_rescan_before_cleanup: boolean;
   allow_danger_custom_rules: boolean;
+  detect_active_usage: boolean;
+  show_reclaim_estimate: boolean;
+  show_network_recovery_cost: boolean;
+  schedule: Schedule;
 }
 
 export interface GlobalCache {
@@ -169,6 +203,7 @@ export interface GlobalCache {
   block: Block | null;
   recommendation: Recommendation;
   references_checked: boolean;
+  in_use?: ActiveUse | null;
 }
 
 export interface Location {
@@ -235,6 +270,10 @@ export interface Preview {
   review: number;
   keep: number;
   in_use: number;
+  /** Selected things a running program uses right now. */
+  running: number;
+  /** Custom rules used to clean for the first time (ids). */
+  first_use_rules: string[];
   scan_age_secs: number;
   volume_free: number | null;
   problems: DeleteOutcome[];
@@ -327,6 +366,81 @@ export interface TrashEntry {
   deleted_at: number;
   bytes: number;
   expires_at: number | null;
+  hold?: TrashHold | null;
+}
+
+export type TrashHold = { kind: "forever" } | { kind: "until"; until: number };
+
+export interface RuleTestMatch {
+  path: string;
+  project: string;
+  disk_bytes: number;
+  claimed_by: string | null;
+  blocked: string | null;
+}
+
+export interface RuleTestResult {
+  matches: number;
+  effective: number;
+  total_bytes: number;
+  partial_size: boolean;
+  samples: RuleTestMatch[];
+  dirs_visited: number;
+  elapsed_ms: number;
+}
+
+export interface VersionNode {
+  id: string;
+  location_id: string;
+  location: string;
+  label: string;
+  installed: boolean;
+  bytes: number;
+  projects: string[];
+  kept: string | null;
+}
+
+export interface LocationGroup {
+  id: string;
+  name: string;
+  ecosystem: string;
+  versions: VersionNode[];
+  unpinned: string[];
+}
+
+export interface DependencyGraph {
+  has_projects: boolean;
+  has_globals: boolean;
+  projects_checked: number;
+  groups: LocationGroup[];
+  projects: string[];
+  unused_bytes: number;
+}
+
+export interface Analytics {
+  months: { month: string; bytes: number; folders: number }[];
+  by_category: { key: string; bytes: number; folders: number }[];
+  by_rule: { key: string; bytes: number; folders: number }[];
+  scans: { timestamp: number; reclaimable_bytes: number; items: number }[];
+}
+
+export interface RunSummary {
+  timestamp: number;
+  action: Schedule["action"];
+  matched: number;
+  matched_bytes: number;
+  removed: number;
+  removed_bytes: number;
+  skipped: number;
+  dry_run: boolean;
+  error: string | null;
+}
+
+export interface ScheduleStatus {
+  schedule: Schedule;
+  last_run: number;
+  next_run: number | null;
+  last_result: RunSummary | null;
 }
 
 export interface TrashOutcome {
@@ -368,6 +482,12 @@ export const api = {
   trashPurge: (ids: string[]) => invoke<TrashOutcome[]>("trash_purge", { ids }),
   trashClearExpired: () => invoke<TrashOutcome[]>("trash_clear_expired"),
   openTrash: () => invoke<void>("open_trash"),
+  trashSetHold: (ids: string[], hold: TrashHold | null) => invoke<TrashEntry[]>("trash_set_hold", { ids, hold }),
+  testRule: (rule: Rule) => invoke<RuleTestResult>("test_rule", { rule }),
+  getDependencyGraph: () => invoke<DependencyGraph>("get_dependency_graph"),
+  getAnalytics: () => invoke<Analytics>("get_analytics"),
+  getScheduleStatus: () => invoke<ScheduleStatus>("get_schedule_status"),
+  runScheduleNow: () => invoke<void>("run_schedule_now"),
   getHistory: () => invoke<HistoryEntry[]>("get_history"),
   revealPath: (path: string) => invoke<void>("reveal_path", { path }),
   diskSpace: () => invoke<[number, number] | null>("disk_space"),
@@ -416,7 +536,7 @@ export const GIT_LABEL: Record<GitStatus, string> = {
 
 export const CATEGORY_LABEL: Record<Category, string> = {
   build_artifact: "Build output",
-  project_dependency: "Project dependencies",
+  project_dependency: "Installed packages",
   package_cache: "Package cache",
   tool_cache: "Tool cache",
   sdk: "SDK",
@@ -439,6 +559,27 @@ export function failedReport(error: string): DeleteReport {
     removed: 0, failed: 1, blocked: 0, skipped: 0, estimated_bytes: 0, volume_free_before: null, volume_free_after: null, dry_run: false, mode: null,
   };
 }
+
+/** Tools & SDKs are grouped by ecosystem; a few backend names are merged into one family. */
+const ECOSYSTEM_FAMILY: Record<string, string> = {
+  "Android SDK": "Android & Gradle",
+  "Android/Gradle": "Android & Gradle",
+  "Flutter/Dart": "Flutter & Dart",
+  "iOS/macOS": "iOS & macOS",
+};
+export const ecosystemFamily = (eco: string) => ECOSYSTEM_FAMILY[eco] ?? eco;
+
+/** "Node.js · Installed packages": what a folder is, in a few words. */
+export const kindLine = (ecosystem: string, category: Category) => `${ecosystem} · ${CATEGORY_LABEL[category]}`;
+
+/** Categories whose contents tools recreate on their own. */
+const REBUILDABLE: Category[] = ["build_artifact", "project_dependency", "package_cache", "tool_cache", "ide_cache", "temp_data", "virtual_environment"];
+export const isRebuildable = (c: Category) => REBUILDABLE.includes(c);
+
+export const inUse = (u: ActiveUse | null | undefined) => u?.status === "in_use";
+
+/** Space a removal gives back: the hard-link-aware estimate when shown, else the size on disk. */
+export const reclaimOf = (x: { reclaimable_bytes: number; disk_bytes: number }, estimate = true) => (estimate ? x.reclaimable_bytes || x.disk_bytes : x.disk_bytes);
 
 /** A part's own risk where it has one, else its owner's. */
 export function partRisk(p: Part, owner: Risk): Risk {

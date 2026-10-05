@@ -193,7 +193,7 @@ export function Modal(props: { title: string; subtitle?: string; onClose: () => 
 }
 
 /** Small floating panel opened from a trigger button. Closes on outside click and Escape. */
-export function Popover(props: { label: string; icon?: IconName; badge?: number; align?: "left" | "right"; width?: string; children: (close: () => void) => ReactNode }) {
+export function Popover(props: { label: string; icon?: IconName; badge?: number; align?: "left" | "right"; width?: string; triggerClass?: string; children: (close: () => void) => ReactNode }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -206,7 +206,7 @@ export function Popover(props: { label: string; icon?: IconName; badge?: number;
   }, [open]);
   return (
     <div ref={root} className="relative">
-      <button className="btn" aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button className={props.triggerClass ?? "btn"} aria-haspopup="dialog" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         {props.icon && <Icon name={props.icon} className="h-4 w-4" />}{props.label}
         {!!props.badge && <span className="ml-0.5 rounded-full bg-indigo-600 px-1.5 text-[10px] font-semibold leading-4 text-white dark:bg-indigo-500">{props.badge}</span>}
       </button>
@@ -235,10 +235,10 @@ export function PageHeader(props: { title: string; subtitle: string; actions?: R
 /** The few numbers that matter, in one quiet strip instead of a row of cards. */
 export function MetricStrip(props: { items: { label: string; value: ReactNode; hero?: boolean; hint?: string }[]; note?: ReactNode }) {
   return (
-    <div className="mb-4 flex flex-wrap items-end gap-x-10 gap-y-2">
+    <div className="mb-4 flex flex-wrap items-end gap-x-8 gap-y-2">
       {props.items.map((m) => (
         <div key={m.label}>
-          <div className={`tabular-nums leading-none ${m.hero ? "text-[32px] font-bold tracking-tight text-indigo-600 dark:text-indigo-300" : "text-xl font-semibold"}`}>{m.value}</div>
+          <div className={`tabular-nums leading-none ${m.hero ? "text-[26px] font-semibold tracking-tight" : "text-[20px] font-semibold text-slate-700 dark:text-slate-200"}`}>{m.value}</div>
           <div className="muted mt-1 text-xs">{m.label}{m.hint ? ` · ${m.hint}` : ""}</div>
         </div>
       ))}
@@ -255,5 +255,52 @@ export function Toast({ tone, children, onClose }: { tone: "info" | "error"; chi
       <div className="min-w-0 flex-1">{children}</div>
       <button className="btn btn-ghost btn-sm" aria-label="Dismiss" onClick={onClose}><Icon name="x" /></button>
     </div>
+  );
+}
+
+/** A compact dropdown that picks one value ("By project ▾"). */
+export function MenuSelect<T extends string>(props: { value: T; options: { value: T; label: string; icon?: IconName; hint?: string }[]; onChange: (v: T) => void; label: string; align?: "left" | "right" }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const down = (e: MouseEvent) => { if (!root.current?.contains(e.target as Node)) setOpen(false); };
+    const key = (e: KeyboardEvent) => { if (e.key === "Escape") { e.stopPropagation(); setOpen(false); } };
+    document.addEventListener("mousedown", down);
+    window.addEventListener("keydown", key, true);
+    return () => { document.removeEventListener("mousedown", down); window.removeEventListener("keydown", key, true); };
+  }, [open]);
+  const cur = props.options.find((o) => o.value === props.value);
+  return (
+    <div ref={root} className="relative">
+      <button className="btn" aria-haspopup="listbox" aria-expanded={open} aria-label={`${props.label}: ${cur?.label}`} onClick={() => setOpen((o) => !o)}>
+        {cur?.icon && <Icon name={cur.icon} className="h-4 w-4" />}{cur?.label}<Icon name="chevron-down" className="h-3.5 w-3.5 text-slate-400" />
+      </button>
+      {open && (
+        <ul role="listbox" aria-label={props.label} className={`float rise absolute z-30 mt-1.5 w-56 p-1 ${props.align === "left" ? "left-0" : "right-0"}`}>
+          {props.options.map((o) => (
+            <li key={o.value} role="option" aria-selected={o.value === props.value}>
+              <button autoFocus={o.value === props.value} className={`flex w-full items-start gap-2 rounded-md px-2.5 py-1.5 text-left text-[13px] hover:bg-slate-100 focus-visible:bg-slate-100 focus-visible:outline-none dark:hover:bg-slate-700/60 dark:focus-visible:bg-slate-700/60 ${o.value === props.value ? "font-semibold text-indigo-700 dark:text-indigo-300" : ""}`} onClick={() => { props.onChange(o.value); setOpen(false); }}>
+                {o.icon && <Icon name={o.icon} className="mt-0.5 h-4 w-4" />}
+                <span className="flex-1">{o.label}{o.hint && <span className="muted block text-xs font-normal">{o.hint}</span>}</span>
+                {o.value === props.value && <Icon name="check" className="mt-0.5 h-4 w-4" />}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** A quiet collapsible section ("Advanced details ▸"). */
+export function Disclosure(props: { title: ReactNode; children: ReactNode; defaultOpen?: boolean; onOpen?: () => void; className?: string }) {
+  return (
+    <details className={`group ${props.className ?? ""}`} open={props.defaultOpen} onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) props.onOpen?.(); }}>
+      <summary className="flex cursor-pointer list-none items-center gap-1.5 py-1 text-[13px] font-medium text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white [&::-webkit-details-marker]:hidden">
+        <Icon name="chevron-right" className="h-3.5 w-3.5 transition-transform group-open:rotate-90" />{props.title}
+      </summary>
+      <div className="pt-2">{props.children}</div>
+    </details>
   );
 }

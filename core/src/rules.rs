@@ -71,6 +71,9 @@ pub struct Rule {
     pub enabled: bool,
     #[serde(default)]
     pub custom: bool,
+    /// Custom rules only: set after the first real cleanup that used this rule was confirmed.
+    #[serde(default)]
+    pub confirmed: bool,
 }
 
 struct R {
@@ -214,6 +217,7 @@ pub fn builtin_rules() -> Vec<Rule> {
             network_cost: r.net,
             enabled: true,
             custom: false,
+            confirmed: true,
         })
         .collect()
 }

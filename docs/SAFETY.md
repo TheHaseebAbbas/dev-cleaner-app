@@ -21,6 +21,9 @@ The backend decides what may be removed. The screens only show its decisions, an
 | **View only** | Docker and WSL data are shown but never removed. |
 | **Hard links** | Files with links outside the folder are not counted as reclaimable, so estimates are not inflated. |
 | **Confirmation** | Danger and Critical items need the *I understand* tick. Permanently deleting Critical items (emulators, simulators, archives) also needs you to type DELETE. |
+| **Programs using a folder** | With *Check for programs using a folder* on (default), the app looks at running processes (dev servers, build tools, Gradle and Kotlin daemons, emulators) and, on Windows, for locked files. A folder in use is marked **In use now**, is never Recommended, and removing it needs confirmation (error `IN_USE` otherwise). When the check cannot run, the folder is shown as *unknown*, never as "not in use". |
+| **First use of a custom rule** | The first cleanup that includes a custom rule's matches asks for confirmation, so a too-broad rule is caught before it removes anything. After one successful removal the rule counts as confirmed. Use **Test** in Settings → Rules to see what a rule matches without selecting or removing anything. |
+| **Scheduled cleanup** | Off by default. When on, it only runs while the app is open, only moves items to the Trash (never permanent), only picks items that need no confirmation (no warnings, not in use, not first-use rules), and follows *Dry run*. The default action only tells you what could be cleaned. |
 | **Partial results** | After a delete, the folder is checked again. If anything is left, the result says *partially cleaned*. |
 | **History** | Every removal is logged with the scan, rule, category, risk, size and result. Each cleanup also writes a full report. |
 

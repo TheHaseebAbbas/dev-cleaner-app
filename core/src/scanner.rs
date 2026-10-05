@@ -7,7 +7,9 @@
 pub use crate::model::{Level, Warning};
 use crate::model::{Block, BlockSource, Category, Confidence, Cost, Fingerprint, GitStatus, Reason, Recommendation, Risk};
 use crate::recommend::{self, Facts};
+use crate::inuse::{ActiveUse, Snapshot};
 use crate::references::{Refs, REFERENCE_FILES};
+use crate::workspace::{self, WorkspaceInfo};
 use crate::rules::{marker_present, Rule, RULES_VERSION};
 use crate::safety::{self, Sensitive};
 use rayon::prelude::*;
@@ -44,11 +46,36 @@ pub struct Policy {
     pub detect_sensitive_files: bool,
     pub activity_mode: ActivityMode,
     pub min_confidence: Confidence,
+    /// Check running processes for folders in use.
+    pub detect_active_usage: bool,
 }
 
 impl Default for Policy {
     fn default() -> Self {
-        Policy { protect_git_tracked: true, detect_sensitive_files: true, activity_mode: ActivityMode::Fast, min_confidence: Confidence::High }
+        Policy { protect_git_tracked: true, detect_sensitive_files: true, activity_mode: ActivityMode::Fast, min_confidence: Confidence::High, detect_active_usage: false }
+    }
+}
+
+/// How recently a part of a split folder was used (for example `target/debug` vs `target/release`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum PartActivity {
+    /// Changed in the last day, or a build is running in the project.
+    Active,
+    /// Changed in the last two weeks.
+    Recent,
+    Old,
+}
+
+/// Days within which a part counts as recently used.
+pub const RECENT_PART_DAYS: u64 = 14;
+
+pub fn part_activity(last_modified: u64, now: u64, building: bool) -> PartActivity {
+    match idle(last_modified, now) {
+        _ if building => PartActivity::Active,
+        Some(d) if d < 1 => PartActivity::Active,
+        Some(d) if d < RECENT_PART_DAYS => PartActivity::Recent,
+        _ => PartActivity::Old,
     }
 }
 
@@ -95,6 +122,12 @@ pub struct Part {
     pub is_file: bool,
     #[serde(default)]
     pub fingerprint: Fingerprint,
+    /// Running processes or locked files (when active-use detection is on).
+    #[serde(default)]
+    pub in_use: Option<ActiveUse>,
+    /// For parts of split project folders: active, recent or old.
+    #[serde(default)]
+    pub activity: Option<PartActivity>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -150,6 +183,11 @@ pub struct Item {
     pub block: Option<Block>,
     pub recommendation: Recommendation,
     pub fingerprint: Fingerprint,
+    /// Set when the package is a member (or the root) of a monorepo workspace.
+    #[serde(default)]
+    pub workspace: Option<WorkspaceInfo>,
+    #[serde(default)]
+    pub in_use: Option<ActiveUse>,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -326,6 +364,8 @@ pub fn parts_measure(path: &Path, files: bool, sensitive: bool) -> (DirStats, Ve
                 usage: None,
                 recommendation: None,
                 is_file: !is_dir,
+                in_use: None,
+                activity: None,
             }
         })
         .collect();
@@ -364,6 +404,12 @@ pub fn project_root(start: &Path, scan_root: &Path) -> PathBuf {
             return x.to_path_buf();
         }
         d = x.parent();
+    }
+    if let Some(ws) = workspace::find(start, scan_root) {
+        let root = PathBuf::from(ws.root);
+        if !is_home(&root) {
+            return root;
+        }
     }
     let mut d = Some(start);
     let mut first = None;
@@ -821,8 +867,50 @@ pub fn assess(c: &Candidate, opts: &ScanOptions, scan_id: &str, now: u64, ctx: &
             if d == 0 { "today".to_string() } else { format!("{d} day{} ago", if d == 1 { "" } else { "s" }) }
         )));
     }
+    let in_use = ctx.in_use(path, &rule.id);
+    if let Some(u) = in_use.as_ref().filter(|u| u.in_use()) {
+        warnings.push(Warning::danger(format!("{}. Close it before cleaning; files may be locked or recreated while it runs.", u.describe())));
+    }
+    let workspace = workspace::find(package, &project);
+    if let Some(ws) = &workspace {
+        detection.push(Reason::yes(if ws.member.is_empty() { format!("Root of a {} workspace", ws.kind) } else { format!("Package {} of a {} workspace", ws.member, ws.kind) }));
+    }
     if block.is_some() {
         risk = Risk::Blocked;
+    }
+    // Parts of split folders: how recently each was used, and a verdict of their own.
+    if !parts.is_empty() {
+        let building = ctx.snapshot.as_ref().map(|s| s.working_in(&project)).unwrap_or_default();
+        for p in parts.iter_mut() {
+            let pu = ctx.in_use(Path::new(&p.path), &rule.id);
+            let busy = pu.as_ref().is_some_and(|u| u.in_use());
+            let act = part_activity(p.last_modified, now, busy);
+            p.activity = Some(act);
+            let mut pw: Vec<Warning> = vec![];
+            if busy {
+                pw.push(Warning::danger(format!("{}. Close it before cleaning.", pu.as_ref().map(|u| u.describe()).unwrap_or_default())));
+            } else if act == PartActivity::Active && !building.is_empty() && p.last_modified + 3600 > now {
+                pw.push(Warning::caution(format!("A build may be using it: {} works in this project.", building.join(", "))));
+            }
+            p.warning = pw.first().cloned();
+            p.recommendation = Some(recommend::recommend(&Facts {
+                risk,
+                category: rule.category,
+                confidence,
+                min_confidence: policy.min_confidence,
+                block: block.as_ref(),
+                git,
+                reclaimable: p.reclaimable_bytes,
+                idle_days: idle(p.last_modified, now),
+                project_idle_days: idle(p.last_modified, now),
+                rebuild_cost: rule.rebuild_cost,
+                network_cost: rule.network_cost,
+                download_bytes: 0,
+                warnings: &pw,
+                usage: None,
+            }));
+            p.in_use = pu;
+        }
     }
     let download = (st.disk_bytes as f64 * rule.category.download_factor()) as u64;
     let download = if rule.network_cost >= Cost::Medium && rule.network_cost != Cost::Unknown { download } else { 0 };
@@ -878,6 +966,8 @@ pub fn assess(c: &Candidate, opts: &ScanOptions, scan_id: &str, now: u64, ctx: &
         warnings,
         block,
         recommendation,
+        workspace,
+        in_use,
     };
     (item, errors)
 }
@@ -887,9 +977,23 @@ pub fn assess(c: &Candidate, opts: &ScanOptions, scan_id: &str, now: u64, ctx: &
 pub struct Ctx {
     roots: Mutex<HashMap<PathBuf, PathBuf>>,
     activity: Mutex<HashMap<PathBuf, u64>>,
+    /// Process snapshot for active-use detection; None when off or unavailable.
+    pub snapshot: Option<Snapshot>,
+    /// True when detection is on (so None above means "unknown", not "off").
+    pub detect_in_use: bool,
 }
 
 impl Ctx {
+    pub fn with_detection(on: bool) -> Ctx {
+        Ctx { snapshot: if on { Snapshot::take() } else { None }, detect_in_use: on, ..Default::default() }
+    }
+    /// Active use of `path`: None when detection is off.
+    pub fn in_use(&self, path: &Path, kind: &str) -> Option<ActiveUse> {
+        if !self.detect_in_use {
+            return None;
+        }
+        Some(self.snapshot.as_ref().map(|s| s.check(path, kind)).unwrap_or_else(ActiveUse::unknown))
+    }
     fn root(&self, package: &Path, scan_root: &Path) -> PathBuf {
         if let Some(r) = self.roots.lock().unwrap().get(package) {
             return r.clone();
@@ -924,7 +1028,7 @@ where
     let total = candidates.len() as u64;
     let done = AtomicU64::new(0);
     let errors = AtomicU64::new(0);
-    let ctx = Ctx::default();
+    let ctx = Ctx::with_detection(opts.policy.detect_active_usage);
     on_progress(Progress::Measure { done: 0, total, current: String::new() });
     let now = now_secs();
     let mut items: Vec<Item> = candidates

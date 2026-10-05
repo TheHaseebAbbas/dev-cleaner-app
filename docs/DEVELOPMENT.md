@@ -62,9 +62,16 @@ core/                  Pure Rust library, no Tauri dependency, fully tested
   src/cleaner.rs       Delete gates, error codes, Trash / permanent / dry run, post-delete check
   src/settings.rs      Settings and defaults
   src/history.rs       history.jsonl, operations.jsonl, scans.jsonl
-  src/trash_bin.rs     List, restore and purge items Dev Cleaner put in the OS Trash; expiry rules
+  src/trash_bin.rs     List, restore and purge items Dev Cleaner put in the OS Trash; expiry rules and per-item holds
+  src/inuse.rs         Process snapshot and locked-file checks: is a folder in use right now
+  src/workspace.rs     Monorepo workspace detection (pnpm, npm, Yarn, Lerna, Cargo, Gradle, Go, Dart, Melos)
+  src/schedule.rs      Scheduled cleanup: when the next run is due and which items it may take
+  src/ruletest.rs      Dry scan with a single rule, for the rule Test button
+  src/graph.rs         Dependency map: installed SDK/toolchain versions and the projects that use them
+  src/analytics.rs     Space reclaimed per month, by category and rule, and scan trend
   src/tests.rs         Tests
   src/tests_v2.rs      Tests for the safety model and recommendations
+  src/tests_v3.rs      Tests for in-use detection, workspaces, schedule, holds, rule test, graph and analytics
 src-tauri/             Tauri shell
   src/lib.rs           Commands and events
   tauri.conf.json      Window, bundle and icon config

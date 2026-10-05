@@ -311,7 +311,7 @@ fn trash_round_trip_restore_and_purge() {
         history::record(&hist_file, &[o], DeleteMode::Trash).unwrap();
     }
     let h = history::load(&hist_file);
-    let listed = trash_bin::list(&h, 30).unwrap();
+    let listed = trash_bin::list(&h, 30, &Default::default()).unwrap();
     let ours: Vec<_> = listed.iter().filter(|e| e.name.starts_with("proj-")).collect();
     assert_eq!(ours.len(), 2);
     assert!(ours.iter().all(|e| e.expires_at.is_some()));
@@ -324,5 +324,5 @@ fn trash_round_trip_restore_and_purge() {
     let r = trash_bin::purge(&h, &[idb]).unwrap();
     assert!(r[0].ok, "{:?}", r[0].error);
     assert!(!b.exists());
-    assert!(trash_bin::list(&h, 30).unwrap().iter().all(|e| !e.name.starts_with("proj-")));
+    assert!(trash_bin::list(&h, 30, &Default::default()).unwrap().iter().all(|e| !e.name.starts_with("proj-")));
 }
