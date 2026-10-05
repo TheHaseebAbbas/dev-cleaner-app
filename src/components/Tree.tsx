@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { fmtAge, fmtBytes, type Part } from "../api";
 import { Icon } from "../ui/Icon";
 import { Badge, Checkbox, SizeBar } from "../ui/primitives";
-import { WarnBadge } from "../ui/warnings";
+import { BlockBadge, RiskBadge, UsageBadge, VerdictBadge, WarnBadge } from "../ui/warnings";
 
 /** Tree geometry in px: left padding, indent per level, chevron slot, gap, checkbox. */
 const PAD = 12;
@@ -35,7 +35,8 @@ export interface RowModel {
   parts: Part[];
   /** Badges shown beside the name (warnings, protected, view only). */
   badges?: ReactNode;
-  protected?: boolean;
+  /** Set when the backend blocks the whole row; the reason shows on hover. */
+  blockedReason?: string;
   /** Why the whole row cannot be ticked (view-only items, or items removable only in parts). */
   lockedReason?: string;
   viewOnly?: boolean;
@@ -64,7 +65,7 @@ export function TreeRow(props: {
   const m = props.model;
   const depth = props.depth ?? 0;
   const hasParts = m.parts.length > 0;
-  const locked = m.protected || !!m.lockedReason;
+  const locked = !!m.blockedReason || !!m.lockedReason;
   return (
     <div className="border-b divider">
       <div
@@ -91,12 +92,12 @@ export function TreeRow(props: {
               </button>
             )}
           </span>
-          <Checkbox checked={props.checked} indeterminate={props.partial} disabled={locked} onChange={props.onToggle} label={`Select ${m.name}`} title={m.lockedReason ?? (m.protected ? "Protected paths cannot be removed" : undefined)} />
+          <Checkbox checked={props.checked} indeterminate={props.partial} disabled={locked} onChange={props.onToggle} label={`Select ${m.name}`} title={m.blockedReason ?? m.lockedReason} />
           <Icon name="folder" className="h-[18px] w-[18px] shrink-0 text-slate-400" />
           <div className="min-w-0 flex-1">
             <div className="flex min-w-0 items-center gap-2">
               <span className={`truncate font-medium ${m.viewOnly ? "text-slate-600 dark:text-slate-300" : ""}`}>{m.name}</span>
-              {hasParts && <Badge icon="layers" title="Can be removed part by part">{m.parts.length} parts</Badge>}
+              {hasParts && <Badge icon="layers" title="Can be removed part by part">{m.parts.length} part{m.parts.length === 1 ? "" : "s"}</Badge>}
               {m.badges}
             </div>
             <div className="muted truncate text-[13px]" title={m.desc}>{m.desc}{m.meta ? <span className="faint"> · {m.meta}</span> : null}</div>
@@ -119,7 +120,7 @@ export function TreeRow(props: {
           <div className="relative flex items-center justify-between gap-3 bg-slate-50 py-1.5 pr-4 text-xs dark:bg-slate-800/40" style={indent(depth + 1)}>
             <Guides depth={depth + 1} />
             <span className="muted" style={{ paddingLeft: CHEV + GAP }}>{props.partsLocked ? "The whole folder is selected, so all parts will be removed." : m.viewOnly ? "Parts of this location (view only)." : m.lockedReason ? "This location can only be cleaned one part at a time." : "Select individual parts"}</span>
-            {!props.partsLocked && !m.viewOnly && !m.protected && (
+            {!props.partsLocked && !m.viewOnly && !m.blockedReason && (
               <span className="flex shrink-0 gap-3">
                 <button className="font-medium text-indigo-600 hover:underline dark:text-indigo-300" onClick={() => props.onSelectAllParts(true)}>Select all</button>
                 <button className="font-medium text-indigo-600 hover:underline dark:text-indigo-300" onClick={() => props.onSelectAllParts(false)}>Clear</button>
@@ -127,16 +128,20 @@ export function TreeRow(props: {
             )}
           </div>
           {m.parts.map((p) => {
-            const checked = props.partsLocked || props.selectedParts.has(p.path);
+            const checked = !p.block && (props.partsLocked || props.selectedParts.has(p.id));
             return (
-              <div key={p.path} className={`relative flex items-center gap-3 border-t py-2 pr-4 divider hover:bg-slate-50 dark:hover:bg-slate-800/50 ${checked ? "bg-indigo-50/60 dark:bg-indigo-500/10" : ""}`} style={indent(depth + 1)}>
+              <div key={p.id} className={`relative flex items-center gap-3 border-t py-2 pr-4 divider hover:bg-slate-50 dark:hover:bg-slate-800/50 ${checked ? "bg-indigo-50/60 dark:bg-indigo-500/10" : ""}`} style={indent(depth + 1)}>
                 <Guides depth={depth + 1} />
                 <div className="relative flex min-w-0 flex-1 items-center" style={{ gap: GAP }}>
                   <span className="shrink-0" style={{ width: CHEV }} />
-                  <Checkbox checked={checked} disabled={props.partsLocked || m.protected || m.viewOnly} onChange={() => props.onTogglePart(p)} label={`Select ${p.name}`} />
+                  <Checkbox checked={checked} disabled={props.partsLocked || !!m.blockedReason || m.viewOnly || !!p.block} onChange={() => props.onTogglePart(p)} label={`Select ${p.name}`} title={p.block?.reason} />
                   <span className="truncate font-mono text-[13px]" title={p.path}>{p.name}</span>
+                  <BlockBadge block={p.block} />
+                  {!p.block && <RiskBadge risk={p.risk} />}
+                  <UsageBadge usage={p.usage} />
+                  {!m.viewOnly && <VerdictBadge rec={p.recommendation} block={p.block} />}
                   {p.warning && <WarnBadge warnings={[p.warning]} />}
-                  <span className="faint shrink-0 text-xs">{p.file_count.toLocaleString()} files · {fmtAge(p.last_modified)}</span>
+                  <span className="faint shrink-0 text-xs">{p.is_file ? "file" : `${p.file_count.toLocaleString()} files`} · {fmtAge(p.last_modified)}</span>
                 </div>
                 <div className="w-28 shrink-0">
                   <div className="text-right tabular-nums">{fmtBytes(p.disk_bytes)}</div>

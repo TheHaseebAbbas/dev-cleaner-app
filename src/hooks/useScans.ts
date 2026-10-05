@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { api, type GlobalCache, type GlobalProgress, type GlobalSummary, type Item, type ScanProgress, type ScanSummary } from "../api";
+import { api, type GlobalCache, type GlobalProgress, type Item, type ScanProgress, type ScanSummary } from "../api";
 
 export type ScanStatus = "idle" | "scanning" | "done" | "stopped" | "error";
 
@@ -36,7 +36,7 @@ export function useScan() {
   const [summary, setSummary] = useState<ScanSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState(0);
-  const itemKey = useCallback((i: Item) => i.path, []);
+  const itemKey = useCallback((i: Item) => i.id, []);
   const batch = useBatcher<Item>(itemKey, setItems);
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export function useGlobalScan() {
   const [status, setStatus] = useState<ScanStatus>("idle");
   const [caches, setCaches] = useState<GlobalCache[]>([]);
   const [progress, setProgress] = useState<GlobalProgress | null>(null);
-  const [summary, setSummary] = useState<GlobalSummary | null>(null);
+  const [summary, setSummary] = useState<ScanSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [startedAt, setStartedAt] = useState(0);
   const key = useCallback((c: GlobalCache) => c.id, []);
@@ -78,10 +78,11 @@ export function useGlobalScan() {
     const subs: Promise<UnlistenFn>[] = [
       listen<GlobalCache>("global-item", (e) => batch.push(e.payload)),
       listen<GlobalProgress>("global-progress", (e) => setProgress(e.payload)),
-      listen<GlobalSummary>("global-done", (e) => {
+      listen<ScanSummary>("global-done", (e) => {
         batch.flush();
         setSummary(e.payload);
         setStatus(e.payload.cancelled ? "stopped" : "done");
+        api.getGlobals().then(setCaches);
       }),
     ];
     return () => { subs.forEach((p) => p.then((f) => f())); };
@@ -94,7 +95,8 @@ export function useGlobalScan() {
     try { await api.startGlobalScan(); } catch (e) { setError(String(e)); setStatus("error"); }
   }, [batch]);
   const stop = useCallback(() => { api.cancelGlobalScan(); }, []);
-  return { status, caches, setCaches, progress, summary, error, startedAt, start, stop };
+  const refresh = useCallback(() => api.getGlobals().then(setCaches), []);
+  return { status, caches, setCaches, progress, summary, error, startedAt, start, stop, refresh };
 }
 
 export function useElapsed(startedAt: number, running: boolean) {

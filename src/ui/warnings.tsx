@@ -1,4 +1,4 @@
-import type { Warning } from "../api";
+import { RISK_LABEL, VERDICT_LABEL, type Block, type Reason, type Recommendation, type Risk, type Usage, type Warning } from "../api";
 import { Badge } from "./primitives";
 import { Icon } from "./Icon";
 
@@ -38,13 +38,13 @@ export function WarningLines({ warnings }: { warnings: Warning[] }) {
 }
 
 /** Shown in the confirm dialog: every warning for what is about to be removed, plus an acknowledgement for dangers. */
-export function WarningPanel(props: { entries: WarnEntry[]; ack: boolean; onAck: (v: boolean) => void; dryRun: boolean }) {
+export function WarningPanel(props: { entries: WarnEntry[]; ack: boolean; onAck: (v: boolean) => void; dryRun: boolean; forceAck?: boolean }) {
   const flagged = props.entries.filter((e) => e.warnings.length);
-  if (!flagged.length) return null;
-  const danger = needsAck(flagged);
+  const danger = needsAck(flagged) || !!props.forceAck;
+  if (!flagged.length && !danger) return null;
   return (
     <div className={`mt-4 rounded-[10px] border p-3 ${danger ? "border-red-300 bg-red-50 dark:border-red-800/70 dark:bg-red-950/30" : "border-amber-300 bg-amber-50 dark:border-amber-800/70 dark:bg-amber-950/30"}`}>
-      <div className="mb-2 flex items-center gap-2 font-semibold"><Icon name="alert" className="h-4 w-4" />{danger ? "Some selected folders may be required" : "Check these before continuing"}</div>
+      <div className="mb-2 flex items-center gap-2 font-semibold"><Icon name="alert" className="h-4 w-4" />{danger ? "Some selected items may be required" : "Check these before continuing"}</div>
       <ul className="max-h-44 space-y-2.5 overflow-auto text-[13px]">
         {flagged.map((e) => (
           <li key={e.path}>
@@ -63,24 +63,53 @@ export function WarningPanel(props: { entries: WarnEntry[]; ack: boolean; onAck:
   );
 }
 
-/** Plain-language safety summary for the details panel: rebuildable, git state, and every warning. */
-export function SafetyList(props: { gitIgnored: boolean | null; gitTracked: boolean | null; warnings: Warning[]; regenerates: string }) {
-  const row = (tone: "ok" | "warn" | "bad", text: string, sub?: string) => (
-    <li key={text} className="flex gap-2 text-[13px]">
-      <Icon name={tone === "ok" ? "check-circle" : "alert"} className={`mt-0.5 h-4 w-4 shrink-0 ${tone === "ok" ? "text-emerald-600 dark:text-emerald-400" : tone === "warn" ? "text-amber-600 dark:text-amber-400" : "text-red-600 dark:text-red-400"}`} />
-      <span><span className="font-medium">{text}</span>{sub && <span className="muted block text-xs">{sub}</span>}</span>
-    </li>
+const BLOCK_LABEL: Record<Block["source"], string> = {
+  user: "Protected",
+  system: "System folder",
+  git: "Tracked by Git",
+  sensitive: "Contains keys",
+  rule: "Not removable",
+};
+
+/** Why a row cannot be selected. */
+export function BlockBadge({ block }: { block: Block | null | undefined }) {
+  if (!block) return null;
+  return <Badge icon="lock" title={block.reason}>{BLOCK_LABEL[block.source]}</Badge>;
+}
+
+/** The recommendation engine's verdict, with its score and top reason in the tooltip. */
+export function VerdictBadge({ rec, block }: { rec: Recommendation | null | undefined; block?: Block | null }) {
+  if (!rec || block) return null;
+  const tone = rec.verdict === "recommended" ? "green" : rec.verdict === "review" ? "amber" : "neutral";
+  const title = [`Score ${rec.score} of 100`, ...rec.reasons.map((r) => `${r.ok ? "+" : "−"} ${r.text}`)].join("\n");
+  return <Badge tone={tone} title={title}>{VERDICT_LABEL[rec.verdict]}</Badge>;
+}
+
+/** Shown only when risk is above Caution, since Safe and Caution are the normal case. */
+export function RiskBadge({ risk }: { risk: Risk | null | undefined }) {
+  if (risk !== "danger" && risk !== "critical") return null;
+  return <Badge tone="red" icon="alert" title={risk === "critical" ? "Removing this may lose data permanently." : "Removing this may lose local state or break a tool."}>{RISK_LABEL[risk]}</Badge>;
+}
+
+/** Whether a shared SDK or toolchain version is used by a scanned project. */
+export function UsageBadge({ usage }: { usage: Usage | null | undefined }) {
+  if (!usage) return null;
+  if (usage.status === "used") return <Badge tone="blue" title={`Used by ${usage.by.join(", ")}`}>Used by {usage.by.length} project{usage.by.length === 1 ? "" : "s"}</Badge>;
+  if (usage.status === "unused") return <Badge title={`No reference in ${usage.projects_checked} scanned project${usage.projects_checked === 1 ? "" : "s"}`}>Not used by scanned projects</Badge>;
+  return <Badge title="Scan your projects first so Dev Cleaner can check which versions they use.">Usage unknown</Badge>;
+}
+
+/** "Why" lists: green ticks support cleaning, amber marks count against it. */
+export function ReasonList({ reasons }: { reasons: Reason[] }) {
+  if (!reasons.length) return null;
+  return (
+    <ul className="space-y-1.5">
+      {reasons.map((r, i) => (
+        <li key={i} className="flex gap-2 text-[13px]">
+          <Icon name={r.ok ? "check-circle" : "alert"} className={`mt-0.5 h-4 w-4 shrink-0 ${r.ok ? "text-emerald-600 dark:text-emerald-400" : "text-amber-600 dark:text-amber-400"}`} />
+          <span>{r.text}</span>
+        </li>
+      ))}
+    </ul>
   );
-  const items = [];
-  if (props.gitTracked) items.push(row("bad", "Git tracks files inside this folder", "Removing it deletes committed files."));
-  else if (props.gitIgnored === true) items.push(row("ok", "Git ignored"));
-  else if (props.gitIgnored === false) items.push(row("warn", "Not Git ignored", "Check that this folder only contains generated files."));
-  const bad = props.warnings.some((w) => w.level === "danger");
-  if (!bad && !props.gitTracked) items.push(row("ok", "Rebuildable", `Comes back with ${props.regenerates}.`));
-  for (const w of props.warnings) {
-    if (props.gitTracked && w.message.startsWith("Git tracks")) continue;
-    if (props.gitIgnored === false && w.message.startsWith("This folder is not listed in .gitignore")) continue;
-    items.push(row(w.level === "danger" ? "bad" : "warn", w.level === "danger" ? "May be required" : "Check first", w.message));
-  }
-  return <ul className="space-y-2">{items}</ul>;
 }

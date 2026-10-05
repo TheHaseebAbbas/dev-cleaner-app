@@ -51,14 +51,20 @@ Useful commands:
 ## Project layout
 ```
 core/                  Pure Rust library, no Tauri dependency, fully tested
-  src/rules.rs         Built-in rules and descriptions
-  src/scanner.rs       Discovery, sizing, git state, warnings, progress
-  src/global.rs        Tool cache table, OS-aware locations, parts, view-only items
-  src/cleaner.rs       Safe deletion (Trash / permanent / dry run)
+  src/model.rs         Shared vocabulary: Risk, Category, Cost, Confidence, GitStatus, Block, Recommendation, Usage, Fingerprint
+  src/safety.rs        Path comparison, system and credential blocks, links/junctions/mounts, fingerprints, sensitive file names
+  src/rules.rs         Built-in rules (versioned), custom rule limits
+  src/scanner.rs       Discovery, project roots, hard-link-aware sizing, Git state, detection evidence, warnings, scan summary
+  src/recommend.rs     Recommendation engine: verdict, score and reasons from the facts
+  src/references.rs    Reads SDK/toolchain versions projects ask for (Gradle, rust-toolchain, FVM, Gradle wrapper)
+  src/global.rs        Tool cache table, OS-aware locations, parts, usage, view-only items
+  src/plan.rs          Turns a selection (scan id + ids) into validated targets; cleanup preview
+  src/cleaner.rs       Delete gates, error codes, Trash / permanent / dry run, post-delete check
   src/settings.rs      Settings and defaults
-  src/history.rs       Append-only history log
+  src/history.rs       history.jsonl, operations.jsonl, scans.jsonl
   src/trash_bin.rs     List, restore and purge items Dev Cleaner put in the OS Trash; expiry rules
   src/tests.rs         Tests
+  src/tests_v2.rs      Tests for the safety model and recommendations
 src-tauri/             Tauri shell
   src/lib.rs           Commands and events
   tauri.conf.json      Window, bundle and icon config
@@ -87,47 +93,46 @@ React view ──invoke──▶ Tauri command ──▶ core
                                  global-item, global-progress, global-done)
 ```
 
-**Scanning.** `scan_with_progress` walks the scan folders (pruning skipped names and matched folders), matches rules by folder name plus marker files, then measures matches in parallel (rayon). Each finished item is emitted immediately, so rows appear while the scan runs. The frontend batches incoming items to one state update per animation frame.
+**Scanning.** `scan_with_progress` walks the scan folders (pruning skipped names, matched folders and anything `safety::redirection` reports as a link, junction or mount), matches rules by folder name plus marker files, then measures matches in parallel (rayon). Every scan gets a `scan_id`, and every item and part an `id` (a hash of its path). Measuring is hard-link aware: `disk_bytes` counts each file once and `reclaimable_bytes` only counts files whose links are all inside the folder. `assess` then adds the Git status, detection evidence and confidence, warnings and blocks, and `recommend::recommend` adds the verdict. Each finished item is emitted immediately, so rows appear while the scan runs. The frontend batches incoming items to one state update per animation frame. `scan-done` carries a `ScanSummary` with counters, timings, skip reasons and the SDK references collected for the tools scan.
 
-**Global caches.** `global.rs` has a table of definitions (`Def`) with an OS, a base (`Home`, `LocalData`, `Data`, `AndroidSdk`), a relative path and flags (`split` for parts, `parts_only`, `info_only`, `allow` whitelist, warnings). `scan_global_caches` resolves them for the current OS, measures the ones that exist, and streams them.
+**Global caches.** `global.rs` has a table of definitions (`Def`) with an OS, a base (`Home`, `LocalData`, `Data`, `AndroidSdk`), a relative path and builder flags: `.parts()` (parts only), `.files()` (files are parts too), `.only()` / `.prefix()` / `.deny()` to limit which children are offered, `.info()` for view only, `.class(category, risk, rebuild, network)`, `.says(consequence, recovery)` and `.warn()`. `scan_global_caches` resolves them for the current OS, measures the ones that exist, checks SDK and toolchain versions against the last complete project scan (`references::Refs::usage_of`), and streams them.
 
 **State machines.** `useScan` and `useGlobalScan` keep `status` (`idle`, `scanning`, `done`, `stopped`, `error`), the items, progress, a summary, and an error. Views render from that status, so every state has its own component. The hooks live in `App` so switching tabs never loses a scan.
 
-**Deletion.** `delete_items` and `delete_global_caches` accept only paths from the last scan (or parts under them), refuse protected, view-only, home, root and symlink targets, and call `cleaner::delete_one`, which records history.
+**Deletion.** The backend is authoritative. `preview_cleanup` / `preview_global_cleanup` and `delete_items` / `delete_global_caches` take a `scan_id` and ids, never paths. `plan::resolve_items` / `resolve_globals` refuse an unknown, stopped or outdated scan, fold parts into a selected owner, and refuse view-only, parts-only and partly blocked targets. `cleaner::validate` then runs every gate again right before deleting (blocks, protected paths, system paths, links, junctions, fingerprint changes, acknowledgement for Danger and Critical), and `cleaner::execute` deletes, checks that the target is gone (`PARTIAL_CLEANUP` otherwise) and removes companions such as an AVD's `.ini`. Every outcome carries an `ErrorCode`. The command returns a `DeleteReport`; successes go to `history.jsonl` and the whole report to `operations.jsonl`.
 
-**Warnings.** `scanner::assess` (projects) and the `.warn()` entries of `global.rs` produce `Warning { level: caution | danger, message }`. The UI shows badges and requires an acknowledgement for `danger`.
+**Warnings and blocks.** `scanner::assess` (projects) and the `.warn()` entries of `global.rs` produce `Warning { level: caution | danger, message }`; the UI requires an acknowledgement for `danger`. A `Block { source, reason }` makes an item unselectable and is enforced again at delete time.
+
+**Recommendations.** `recommend::recommend(&Facts)` is a pure function: size, risk, rebuild and download cost, confidence, Git, idle days, usage and warnings give a verdict (`recommended`, `review`, `keep`, `blocked`), a 0 to 100 score and the reasons. Thresholds are `OLD_DAYS` (30) and `RECENT_DAYS` (3).
 
 **Trash.** `trash_bin` uses the `trash` crate's `os_limited` API (Windows and Linux only) and shows only items that match a history entry, so it never touches other Trash content. A background thread in `src-tauri` purges expired items at start and hourly.
 
-**Data files.** `settings.json` and `history.jsonl` in the app config directory.
+**Data files.** `settings.json`, `history.jsonl`, `operations.jsonl` and `scans.jsonl` in the app config directory. Settings → Diagnostics reads them through `get_diagnostics`.
 
 ## Adding a rule or a cache
 
 ### A project rule
-In `core/src/rules.rs` add a line in `builtin_rules()`:
-```rust
-rule("id", "Display name", "Ecosystem", &["folder"], &["marker.file"], &[], "restore command", Low),
-```
-Arguments: id, name, ecosystem, folder names, parent marker files, self marker files (files that must exist inside the folder), restore command, risk. Then:
-1. Add a description in `describe()` and set `split` to true there if its direct children are independent.
-2. Add a test in `core/src/tests.rs` (see the existing scan tests: create a temp project, scan, assert).
-3. Add the row to [RULES.md](RULES.md).
+In `core/src/rules.rs` add an `R { ... }` entry to `BUILTIN`. Fields: `id`, `name`, `eco`, `cat` (a `Category`), `dirs` (folder names), `parent` (marker files beside the folder; `*.ext` and `../name` allowed), `selfm` (files that must exist inside the folder), `conf` (optional files that raise confidence, such as lock files), `regen`, `risk` (`Safe` or `Caution`), `rebuild` and `net` (costs), `desc`, `consequence` and `split` (true if its direct children are independent parts). If you change what an existing rule matches, bump `RULES_VERSION`. Then:
+1. Add a test in `core/src/tests.rs` or `tests_v2.rs` (create a temp project, scan, assert).
+2. Add the row to [RULES.md](RULES.md).
 
 Always give a parent marker unless the folder name is unmistakable.
 
 ### A tool cache
 In `core/src/global.rs` add a `d(...)` line to `TABLE`:
 ```rust
-d("id", "Name", "Category", "windows|macos|linux|unix|all", Home, "relative/path", "what happens if removed", split)
+d("id", "Name", "Ecosystem", "windows|macos|linux|unix|all", Home, "relative/path", "short note", split)
+    .class(PackageCache, Caution, Low, High)
+    .says("what happens if removed", "how to get it back")
 ```
-Chain modifiers as needed: `.warn(Danger, "message")`, `.only(&["names"])` for a whitelist, `.info()` for view only, or wrap with `parts_only(...)`. Add a test, and add the row to [RULES.md](RULES.md).
+Chain modifiers as needed: `.warn(Danger, "message")`, `.only(&["names"])` or `.prefix(&["Prefix"])` to limit which children are offered, `.deny(&[("name", "why")])`, `.parts()` for parts only, `.files()` to offer files as parts, `.info()` for view only. Add a test, and add the row to [RULES.md](RULES.md).
 
 ### A warning
 Project warnings go in `scanner::assess`. Keep messages in plain language and say what to do.
 
 ## Tests and checks
 ```bash
-cargo test -p dev_cleaner_core      # scanner, deletion safety, parts, warnings, locations
+cargo test -p dev_cleaner_core      # safety gates, scanner, recommendations, references, deletion, parts, locations
 cargo check -p dev-cleaner-app      # shell compiles
 npm run build                       # TypeScript strict check and bundle
 ```

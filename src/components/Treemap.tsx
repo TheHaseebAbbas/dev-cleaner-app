@@ -31,7 +31,7 @@ function layout(items: Item[], x: number, y: number, w: number, h: number, out: 
 
 const COLORS = ["#6366f1", "#0ea5e9", "#14b8a6", "#a78bfa", "#d97706", "#64748b", "#db2777", "#65a30d", "#0891b2", "#ea580c"];
 
-export function Treemap(props: { items: Item[]; selected: string | null; onSelect: (path: string) => void }) {
+export function Treemap(props: { items: Item[]; selected: string | null; onSelect: (id: string) => void }) {
   const sorted = [...props.items].filter((i) => i.disk_bytes > 0).sort((a, b) => b.disk_bytes - a.disk_bytes).slice(0, 200);
   const rects: Rect[] = [];
   layout(sorted, 0, 0, 100, 100, rects);
@@ -47,15 +47,15 @@ export function Treemap(props: { items: Item[]; selected: string | null; onSelec
         const big = r.w > 8 && r.h > 10;
         return (
           <button
-            key={r.item.path}
+            key={r.item.id}
             title={`${r.item.rule_name}\n${r.item.ecosystem}\n${fmtBytes(r.item.disk_bytes)}`}
             aria-label={`${r.item.rule_name} in ${r.item.project_name}, ${fmtBytes(r.item.disk_bytes)}`}
-            onClick={() => props.onSelect(r.item.path)}
+            onClick={() => props.onSelect(r.item.id)}
             className="absolute overflow-hidden border border-white/40 p-1 text-left text-[11px] leading-tight text-white dark:border-black/30"
             style={{
               left: `${r.x}%`, top: `${r.y}%`, width: `${r.w}%`, height: `${r.h}%`,
               background: color, opacity: 0.88,
-              outline: props.selected === r.item.path ? "3px solid white" : "none",
+              outline: props.selected === r.item.id ? "3px solid white" : "none",
               outlineOffset: -3,
             }}
           >
