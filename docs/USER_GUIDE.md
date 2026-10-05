@@ -15,14 +15,14 @@
 
 ## Getting around
 
-The sidebar groups the app into **Clean** (Projects, Tools & SDKs), **Manage** (Trash, History) and **Configure** (Settings). The bottom of the sidebar shows free disk space, an amber **Dry run** note when nothing will be deleted, and **About**.
+The sidebar groups the app into **Clean** (Projects, Tools & SDKs), **Manage** (Trash, History) and **Configure** (Settings). The bottom of the sidebar shows free disk space, an amber **Dry run** note when nothing will be deleted, and **Commands**.
 
 | Shortcut | Action |
 | --- | --- |
-| Ctrl/Cmd+K | Command palette: scan, open a page, toggle dark mode or dry run, About |
+| Ctrl/Cmd+K or / | Search projects |
+| Ctrl/Cmd+Shift+P | Command palette: scan, open a page, toggle dark mode or dry run, About |
 | Ctrl/Cmd+R | Scan (or stop) on Projects and Tools & SDKs |
 | Ctrl/Cmd+A | Select everything visible (press again to clear) |
-| Ctrl/Cmd+F | Search projects |
 | Ctrl/Cmd+, | Open Settings |
 | Esc | Close the panel, then clear the selection |
 | Delete | Reclaim the selection (asks first) |
@@ -62,6 +62,9 @@ The numbers at the top are the reclaimable total (blocked items excluded), how m
 - **Size on disk** is what you actually get back. Apparent size (the sum of file sizes) is in the details panel.
 - **Project used** is the newest change anywhere in the project, not only in the folder. A project you touched yesterday is probably live.
 - Click a row to open the **details panel**: why it is (or is not) recommended, what the folder is, why it was detected (marker files, lock files, Git), what happens if you remove it and how to get it back (with the right command for your package manager), the cost (risk, rebuild time, downloads, confidence, Git status, last activity), storage details including the estimated reclaim, and a button to show it in your file manager.
+- **In use now** means a running program (a dev server, a build, a Gradle daemon, an emulator) or a locked file uses the folder. Close it first, or confirm to remove it anyway.
+- Folders inside a monorepo are grouped under the workspace root (pnpm, npm, Yarn, Lerna, Cargo, Gradle, Go, Dart or Melos), and the row shows the package they belong to.
+- Rust `target` and similar split folders list their parts as **Active** (changed today or a build is running), **Used recently** (last 14 days) or **Not used recently**, so you can remove old `release` output and keep the `debug` build you are using.
 - **Estimated reclaim** leaves out files that are hard-linked from elsewhere (pnpm and some caches do this), since removing them frees nothing.
 
 ### Views and filters
@@ -72,9 +75,11 @@ The numbers at the top are the reclaimable total (blocked items excluded), how m
 - **Expand all / Collapse all** (next to the view switcher) opens or closes every project group and every folder's parts in one click. The button flips to show what the next click does. You can also open a single group or the arrow on a row. The same button is in the Tools & SDKs page.
 
 ## The Tools & SDKs page
-Same states as Projects. Results are grouped as *Package & build caches*, *SDKs & toolchains*, *IDE caches*, *Developer state* (emulators, simulators, archives), *Temporary data* and *View only*, sorted by size. Only caches that exist on your computer are shown. Click a row for the same details panel as Projects.
+Same states as Projects. Results are grouped by ecosystem (Android, Node.js, Rust and so on), with *View only* locations last, sorted by size. Only caches that exist on your computer are shown. Click a row for the same details panel as Projects.
 
 Scan your projects first. SDK platforms, build tools, NDKs, Rust toolchains, FVM Flutter versions and Gradle distributions are then marked **Used by N projects**, **Not used by scanned projects** or **Usage unknown**, and versions in use are marked Keep.
+
+Switch **View** to **Dependency map** to see each installed version (Android platforms, build-tools and NDKs, Rust toolchains, FVM Flutter versions, Gradle distributions) with the projects that use it. Versions a project asks for but that are not installed are listed too. **Select N unused** ticks the versions no scanned project uses. It is not offered when a project does not pin a version, since that project could use any of them.
 
 Items marked **View only**, such as Docker Desktop's disk image, are never deletable from the app. The note beside them explains the safe way to shrink them (for example `docker system prune`).
 
@@ -128,13 +133,16 @@ Lists the folders Dev Cleaner removed, newest first: size, when they were remove
 - After restoring, rescan so the folder appears in the list again.
 
 ### Automatic clearing
-**Settings → Trash → Clear automatically after** sets how many days items stay (Never, 7, 14, 30, 90, or any number; default 30). The app checks when it opens and every hour while it is running, and removes only items older than that. Items already restored are not affected. Set it to 0 / Never to keep everything until you delete it yourself. The Trash page shows each item's remaining time. The app has to be running for cleanup to happen.
+**Settings → Trash → Clear automatically after** sets how many days items stay (Never, 7, 14, 30, 90, or any number; default 30). The app checks when it opens and every hour while it is running, and removes only items older than that. Items already restored are not affected. Set it to 0 / Never to keep everything until you delete it yourself. The Trash page shows each item's remaining time. To keep one item longer, press **Change** in its Auto-clear column and pick 30 or 90 more days, or *Until I delete it*. The app has to be running for cleanup to happen.
 
 ### macOS
 macOS does not let apps list or restore the Trash, so the Trash page only offers **Open Trash**. In Finder, right-click an item and choose **Put Back**. Auto-clear is not available; use Finder's "Remove items from the Trash after 30 days" setting (Finder → Settings → Advanced) instead.
 
 ## History
-Every removal is logged with time, path, project, kind (category and risk), how it was removed and the estimated space freed. The top shows the total reclaimed.
+Every removal is logged with time, path, project, kind, how it was removed and the estimated space freed. The top shows the total reclaimed. Open **Over time** for the space reclaimed per month over the last year, the kinds of folders that freed the most, and how the reclaimable total changed between scans.
+
+## Scheduled cleanup
+Off by default. Turn it on in **Settings → Cleaning → Scheduled cleanup**. While the app is open it rescans your project folders every day, week, two weeks or month. It then tells you what could be reclaimed, or, if you chose *Move to Trash*, moves the items that need no confirmation to the Trash. It never deletes permanently.
 
 ## Where your data is stored
 Settings and history are plain files, safe to back up or delete:

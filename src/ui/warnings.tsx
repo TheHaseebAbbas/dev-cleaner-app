@@ -113,3 +113,42 @@ export function ReasonList({ reasons }: { reasons: Reason[] }) {
     </ul>
   );
 }
+
+export interface Check {
+  tone: "ok" | "caution" | "danger" | "neutral";
+  icon: "check" | "alert" | "lock" | "eye" | "clock";
+  text: string;
+  title?: string;
+}
+
+/** Compact safety line: "✓ Rebuildable ✓ Git ignored ⚠ Check first". Icons and words, never color alone. */
+export function SafetyLine({ checks, max = 3 }: { checks: Check[]; max?: number }) {
+  if (!checks.length) return null;
+  const color = { ok: "text-emerald-600 dark:text-emerald-400", caution: "text-amber-600 dark:text-amber-400", danger: "text-red-600 dark:text-red-400", neutral: "text-slate-500 dark:text-slate-400" };
+  const text = { ok: "", caution: "text-amber-700 dark:text-amber-300", danger: "text-red-700 dark:text-red-300", neutral: "" };
+  return (
+    <span className="flex min-w-0 items-center gap-3 overflow-hidden text-xs">
+      {checks.slice(0, max).map((c) => (
+        <span key={c.text} className={`flex shrink-0 items-center gap-1 ${text[c.tone]}`} title={c.title}>
+          <Icon name={c.icon === "check" ? "check" : c.icon} className={`h-3.5 w-3.5 ${color[c.tone]}`} />{c.text}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** Full list for the details panel. */
+export function CheckList({ checks }: { checks: Check[] }) {
+  if (!checks.length) return null;
+  const color = { ok: "text-emerald-600 dark:text-emerald-400", caution: "text-amber-600 dark:text-amber-400", danger: "text-red-600 dark:text-red-400", neutral: "text-slate-500 dark:text-slate-400" };
+  return (
+    <ul className="space-y-1.5">
+      {checks.map((c) => (
+        <li key={c.text} className="flex gap-2 text-[13px]">
+          <Icon name={c.icon} className={`mt-0.5 h-4 w-4 shrink-0 ${color[c.tone]}`} />
+          <span>{c.text}{c.title && <span className="muted block text-xs">{c.title}</span>}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}

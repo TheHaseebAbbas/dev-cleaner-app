@@ -14,7 +14,7 @@ Settings save automatically a moment after you change them. Open the **Settings*
 
 ## Every setting
 
-Settings opens as a list of sections (Appearance, Cleaning, Recommendations, Safety, Scanning, Protection, Rules, Trash, Diagnostics) with a one-line summary of each. Click a section to edit it; changes save automatically. Safety has a few switches and lists the protections that are always on. In Rules you can search, see each rule's details (folder names, marker files, how it comes back, risk, costs, confidence) and add your own. Diagnostics shows what the last scans and cleanups did. **About** shows the version and where your data lives.
+Settings opens as a list of sections (Appearance, Cleaning, Safety, Scanning, Protection, Rules, Trash, About) with a one-line summary of each. Click a section to edit it; changes save automatically. Safety has a few switches and lists the protections that are always on. In Rules you can search, see each rule's details (folder names, marker files, how it comes back, risk, costs, confidence), test custom rules and add your own. **About** shows the version, where your data lives, and diagnostics of the last scans and cleanups.
 
 Sections appear in this order in the app.
 
@@ -22,6 +22,8 @@ Sections appear in this order in the app.
 | Setting | Default | Notes |
 | --- | --- | --- |
 | **Theme** (`theme`) | System | System follows your OS dark/light setting. |
+| **Show estimated reclaimable space** (`show_reclaim_estimate`) | On | Sizes count only what really comes back (files hard-linked from elsewhere stay). Off shows the plain size on disk. |
+| **Show download cost** (`show_network_recovery_cost`) | On | Says how much may have to be downloaded again to get a folder back. |
 
 ### Cleaning
 | Setting | Default | What it does | Best value |
@@ -30,7 +32,9 @@ Sections appear in this order in the app.
 | **Dry run** (`dry_run`) | Off | Runs the whole flow and reports what would be freed, but deletes nothing. A banner in the sidebar reminds you it is on. | On for your first run, after changing rules, or when demoing. Off afterwards. |
 | **Ask before removing** (`confirm_before_delete`) | On | Shows a summary dialog before removing. Items with a red warning always ask, even if this is off. | Keep on. Turn off only if you clean often and trust your protected paths. |
 
-### Recommendations
+#### Recommendations
+Part of the Cleaning section.
+
 | Setting | Default | What it does | Best value |
 | --- | --- | --- | --- |
 | **Show recommendations** (`recommendations_enabled`) | On | Marks every item Recommended, Review or Keep with its reasons, and shows Quick select. | On. |
@@ -38,9 +42,20 @@ Sections appear in this order in the app.
 | **Minimum confidence** (`minimum_recommendation_confidence`) | High | Matches less certain than this are marked Review instead of Recommended. | High. |
 | **Project activity** (`activity_mode`) | Fast | Fast looks at the project's top-level files. Accurate finds the newest file anywhere in the project, skipping build and dependency folders. | Fast. Accurate on monorepos where edits are deep. |
 
+#### Scheduled cleanup
+Part of the Cleaning section. Stored as `schedule` in settings.json.
+
+| Setting | Default | What it does | Best value |
+| --- | --- | --- | --- |
+| **Check my projects regularly** (`schedule.enabled`) | Off | Rescans your scan folders on a schedule while the app is open. A run that is due when the app starts begins two minutes later. | On if you keep the app open and want a nudge. |
+| **How often** (`schedule.every_days`) | Weekly | Daily, weekly, every 2 weeks or monthly. | Weekly. |
+| **What to look for** (`schedule.profile`) | Safe | Which Quick select profile picks the items: `safe` or `recommended`. Deep is not offered. | Safe. |
+| **Then** (`schedule.action`) | Just tell me | `remind` shows what could be reclaimed. `clean` moves those items to the Trash. Items that would need a confirmation are always left for you. | Just tell me, until you trust the results. |
+
 ### Safety
 | Setting | Default | What it does | Best value |
 | --- | --- | --- | --- |
+| **Check for programs using a folder** (`detect_active_usage`) | On | Looks for running programs (dev servers, Gradle daemons, emulators) and locked files on Windows that use a folder. Folders in use are never recommended and need confirmation. When it cannot check, the app says *unknown*. | On. |
 | **Block folders Git tracks** (`protect_git_tracked`) | On | Folders with tracked files cannot be selected. Off turns the block into a red warning. | On. |
 | **Look for keys and secrets** (`detect_sensitive_files`) | On | Checks file names inside candidates. Signing keys block a folder; `.env` and key files add a red warning. | On. |
 | **Warn when a scan is older than** (`stale_scan_minutes`) | 10 minutes | The confirm dialog shows the scan's age past this point. Each item is checked again either way. | 10. |
@@ -52,6 +67,8 @@ The protections that are always on are listed in [Safety](SAFETY.md).
 | Setting | Default | What it does | Best value |
 | --- | --- | --- | --- |
 | **Clear automatically after** (`trash_retention_days`) | 30 days | Items Dev Cleaner moved to the Trash are deleted for good after this many days. 0 means never. | 7 to 14 days on a small disk, 30 days as a safety net, 0 if you want to review everything yourself. Not available on macOS. |
+
+Single items can be kept longer from the Trash page (**Change** in the Auto-clear column: 30 or 90 more days, or until you delete it). These holds are stored in `trash_holds.json`.
 
 See [the Trash tab](USER_GUIDE.md#where-removed-folders-go-and-getting-them-back) to restore or delete items now.
 
@@ -79,8 +96,8 @@ Each rule can be switched on or off. A switched-off rule is never matched. The b
 | --- | --- | --- |
 | **Allow dangerous custom rules** (`allow_danger_custom_rules`) | Off | Lets a custom rule be marked Danger. Off, any custom rule saved as Danger or higher is treated as Caution. |
 
-### Diagnostics
-Read only. For the last project scan and tools scan: scan id, whether it finished, folders and files visited, time spent finding and measuring, data examined, unreadable entries, rules used and why folders were skipped (with examples on hover). Also the active and turned-off rules, your scan folders, the data folder, and the last 10 cleanups.
+### About and diagnostics
+Version and data folder, then diagnostics (read only). For the last project scan and tools scan: scan id, whether it finished, folders and files visited, time spent finding and measuring, data examined, unreadable entries, rules used and why folders were skipped (with examples on hover). Also the active and turned-off rules, your scan folders, the data folder, and the last 10 cleanups.
 
 ## Recommended setups by tech stack
 Scan folder: the folder that holds your projects. Everything below is optional tuning.
@@ -186,6 +203,8 @@ Add your own in **Settings → Cleanup rules → Add your own rule**.
 | Risk | Safe or Caution (Danger only with *Allow dangerous custom rules*) | Safe |
 
 Custom rules are never more than Medium confidence, so their matches are offered as Review rather than Recommended. Always use a marker file when the folder name is generic (`dist`, `out`, `cache`). Without one, every folder with that name inside your scan folders matches. Custom rules are marked with a **custom** badge and can be deleted again.
+
+Press **Test** next to a custom rule (or on the form before saving) to scan your folders with only that rule. It lists how many folders match, their total size (measured for up to 500 matches), up to 20 examples, and which matches another rule already covers or are blocked. Nothing is selected or removed. A new rule shows **Not used yet** until its first cleanup, which asks you to confirm.
 
 ## Editing settings.json by hand
 The file is in the data folder listed in the [User guide](USER_GUIDE.md#where-your-data-is-stored). Close the app first. Fields: `scan_roots`, `exclude_names`, `protected_paths`, `rule_enabled`, `custom_rules`, `delete_mode` (`"trash"` or `"permanent"`), `dry_run`, `confirm_before_delete`, `min_size_mb`, `min_age_days`, `max_depth`, `theme` (`"system"`, `"light"`, `"dark"`), `scan_on_launch`, `trash_retention_days`, `recommendations_enabled`, `protect_git_tracked`, `detect_sensitive_files`, `minimum_recommendation_confidence` (`"medium"`, `"high"`, `"very_high"`), `default_cleanup_profile` (`"safe"`, `"recommended"`, `"deep"`), `activity_mode` (`"fast"`, `"accurate"`), `stale_scan_minutes`, `require_rescan_before_cleanup`, `allow_danger_custom_rules`. Custom rule risks are `"safe"`, `"caution"` or `"danger"`; the old `"low"`, `"medium"` and `"high"` still load. Missing fields use defaults, so you can delete the file to start over.
