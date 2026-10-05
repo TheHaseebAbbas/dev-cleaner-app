@@ -41,7 +41,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          sed "s/{{VERSION}}/$VERSION/g" .github/release-notes.md > notes.md
+          # This version's section of CHANGELOG.md, without its heading.
+          awk -v v="## $VERSION" '$0 == v { on = 1; next } on && /^## / { exit } on' CHANGELOG.md > changes.md
+          if ! grep -q '[^[:space:]]' changes.md; then
+            echo "::error::CHANGELOG.md has no '## $VERSION' section"
+            exit 1
+          fi
+          awk 'FNR == NR { c = c $0 "\n"; next } $0 == "{{CHANGES}}" { printf "%s", c; next } { print }' changes.md .github/release-notes.md \
+            | sed "s/{{VERSION}}/$VERSION/g" > notes.md
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "Release $TAG already exists; files will be replaced."
           else
