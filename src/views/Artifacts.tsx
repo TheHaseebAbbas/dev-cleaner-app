@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useState } from "react";
 import { api, ageDays, fmtBytes, fmtDate, type DeleteOutcome, type Item, type Part, type Rule, type Settings } from "../api";
 import { Confirm } from "../components/Confirm";
 import { Details } from "../components/Details";
+import { LocationsDialog } from "../components/LocationsDialog";
 import { HowItWorks } from "../components/HowItWorks";
 import { Treemap } from "../components/Treemap";
 
@@ -32,6 +33,7 @@ export function Artifacts(props: {
   const [view, setView] = useState<View>("project");
   const [confirming, setConfirming] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [showWhere, setShowWhere] = useState(false);
   const [result, setResult] = useState<DeleteOutcome[] | null>(null);
 
   useEffect(() => { api.listRules().then(setRules); }, [settings.custom_rules, settings.rule_enabled]);
@@ -169,6 +171,7 @@ export function Artifacts(props: {
         {rootsLabel.length > 3 && <span className="text-slate-500">+{rootsLabel.length - 3} more</span>}
         <span className="text-slate-500">· {rules.filter((r) => r.enabled).length} rule{rules.filter((r) => r.enabled).length === 1 ? "" : "s"} active · deletes only the matched folders, never your source code</span>
         <span className="ml-auto flex gap-2">
+          <button className="btn !py-0.5" onClick={() => setShowWhere(true)}>Where it looks</button>
           <button className="btn !py-0.5" onClick={() => setShowHelp(true)}>How it works</button>
           <button className="btn !py-0.5" onClick={props.onOpenSettings}>Change folders</button>
         </span>
@@ -255,6 +258,7 @@ export function Artifacts(props: {
         </button>
       </div>
 
+      {showWhere && <LocationsDialog items={items} onClose={() => setShowWhere(false)} onOpenSettings={props.onOpenSettings} />}
       {showHelp && (
         <Confirm title="How Dev Cleaner decides what to delete" confirmLabel="Got it" onConfirm={() => setShowHelp(false)} onCancel={() => setShowHelp(false)}>
           <div className="max-h-[60vh] overflow-auto"><HowItWorks settings={settings} rules={rules} onOpenSettings={props.onOpenSettings} onClose={() => setShowHelp(false)} /></div>

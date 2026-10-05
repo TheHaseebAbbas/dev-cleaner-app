@@ -73,6 +73,24 @@ export interface GlobalCache {
   file_count: number;
   note: string;
   parts: Part[];
+  parts_only: boolean;
+}
+
+export interface Location {
+  id: string;
+  name: string;
+  category: string;
+  path: string;
+  exists: boolean;
+}
+
+export interface Locations {
+  scan_roots: { path: string; exists: boolean }[];
+  exclude_names: string[];
+  protected_paths: string[];
+  max_depth: number;
+  android_sdk_env: string | null;
+  global: Location[];
 }
 
 export interface DeleteOutcome {
@@ -98,6 +116,7 @@ export const api = {
   cancelScan: () => invoke<void>("cancel_scan"),
   deleteItems: (paths: string[]) => invoke<DeleteOutcome[]>("delete_items", { paths }),
   listGlobalCaches: () => invoke<GlobalCache[]>("list_global_caches"),
+  getLocations: () => invoke<Locations>("get_locations"),
   getItems: () => invoke<Item[]>("get_items"),
   deleteGlobalCaches: (ids: string[], partPaths: string[]) =>
     invoke<DeleteOutcome[]>("delete_global_caches", { ids, partPaths }),

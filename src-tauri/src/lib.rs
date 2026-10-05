@@ -147,6 +147,7 @@ fn delete_global_caches(app: AppHandle, state: State<'_, AppState>, ids: Vec<Str
     let mut outcomes: Vec<DeleteOutcome> = vec![];
     for id in &ids {
         outcomes.push(match known.iter().find(|c| &c.id == id && c.exists) {
+            Some(c) if c.parts_only => refused(&c.path, "this folder can only be cleaned part by part", settings.dry_run),
             Some(c) => cleaner::delete_one(std::path::Path::new(&c.path), settings.delete_mode, settings.dry_run),
             None => refused(id, "unknown or missing cache", settings.dry_run),
         });
@@ -161,6 +162,37 @@ fn delete_global_caches(app: AppHandle, state: State<'_, AppState>, ids: Vec<Str
     }
     history::record(&history_path(&app)?, &outcomes, settings.delete_mode).map_err(|e| e.to_string())?;
     Ok(outcomes)
+}
+
+#[derive(serde::Serialize)]
+struct PathStatus {
+    path: String,
+    exists: bool,
+}
+
+#[derive(serde::Serialize)]
+struct Locations {
+    scan_roots: Vec<PathStatus>,
+    exclude_names: Vec<String>,
+    protected_paths: Vec<String>,
+    max_depth: usize,
+    android_sdk_env: Option<String>,
+    global: Vec<global::Location>,
+}
+
+/// Everything Dev Cleaner looks at, for the "where it looks" dialog. Does not measure sizes.
+#[tauri::command]
+fn get_locations(app: AppHandle) -> Result<Locations, String> {
+    let settings = Settings::load(&settings_path(&app)?);
+    let env = global::Env::detect();
+    Ok(Locations {
+        scan_roots: settings.scan_roots.iter().map(|p| PathStatus { path: p.to_string_lossy().into_owned(), exists: p.is_dir() }).collect(),
+        exclude_names: settings.exclude_names,
+        protected_paths: settings.protected_paths.iter().map(|p| p.to_string_lossy().into_owned()).collect(),
+        max_depth: settings.max_depth,
+        android_sdk_env: env.android_sdk_env.as_ref().map(|p| p.to_string_lossy().into_owned()),
+        global: global::locations_with(&env),
+    })
 }
 
 #[tauri::command]
@@ -205,7 +237,7 @@ pub fn run() {
         .manage(AppState::default())
         .invoke_handler(tauri::generate_handler![
             get_settings, save_settings, list_rules, start_scan, cancel_scan, delete_items,
-            get_items, list_global_caches, delete_global_caches, get_history, reveal_path, disk_space
+            get_items, get_locations, list_global_caches, delete_global_caches, get_history, reveal_path, disk_space
         ])
         .run(tauri::generate_context!())
         .expect("error while running Dev Cleaner");

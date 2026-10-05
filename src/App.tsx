@@ -75,7 +75,7 @@ export default function App() {
       </nav>
       <main className="min-w-0 flex-1 p-4">
         {tab === "projects" && <Artifacts items={items} scanning={scanning} settings={settings} onScan={scan} onCancel={() => api.cancelScan()} onDeleted={onDeleted} onOpenSettings={() => setTab("settings")} />}
-        {tab === "global" && <Global settings={settings} />}
+        {tab === "global" && <Global settings={settings} onOpenSettings={() => setTab("settings")} />}
         {tab === "history" && <History />}
         {tab === "settings" && <SettingsView settings={settings} onChange={updateSettings} />}
       </main>

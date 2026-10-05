@@ -133,3 +133,50 @@ fn every_builtin_rule_has_a_description() {
         assert!(!r.description.is_empty(), "{} has no description", r.id);
     }
 }
+
+#[test]
+fn android_sdk_location_follows_env_var_then_os_default() {
+    use crate::global::{list_global_caches_with, locations_with, Env};
+    use std::path::PathBuf;
+    let t = tempfile::tempdir().unwrap();
+    let sdk = t.path().join("MySdk");
+    write(&sdk.join("platforms/android-34/android.jar"), 100);
+    write(&sdk.join("platforms/android-33/android.jar"), 50);
+    write(&sdk.join("ndk/26.1/x"), 10);
+    let mut env = Env {
+        os: "windows".into(),
+        home: Some(PathBuf::from("C:/Users/x")),
+        local_data: Some(t.path().join("AppData/Local")),
+        data: None,
+        android_sdk_env: Some(sdk.clone()),
+    };
+    // env var wins
+    assert_eq!(env.android_sdk_root().unwrap(), sdk);
+    let caches = list_global_caches_with(&env);
+    let plat = caches.iter().find(|c| c.id == "android-platforms").unwrap();
+    assert!(plat.exists);
+    assert_eq!(plat.parts.len(), 2);
+    assert!(plat.parts.iter().any(|p| p.name == "android-34"));
+    // env var unset: Windows default is under AppData\Local
+    env.android_sdk_env = None;
+    assert_eq!(env.android_sdk_root().unwrap(), t.path().join("AppData/Local/Android/Sdk"));
+    // Windows-only entries show up, unix-only ones do not
+    let ids: Vec<_> = locations_with(&env).into_iter().map(|l| l.id).collect();
+    assert!(ids.contains(&"npm-win".to_string()) && ids.contains(&"jetbrains-win".to_string()));
+    assert!(!ids.contains(&"npm".to_string()) && !ids.contains(&"deriveddata".to_string()));
+    // macOS default
+    env.os = "macos".into();
+    env.home = Some(PathBuf::from("/Users/x"));
+    assert_eq!(env.android_sdk_root().unwrap(), PathBuf::from("/Users/x/Library/Android/sdk"));
+}
+
+#[test]
+fn windows_temp_is_parts_only() {
+    use crate::global::{list_global_caches_with, Env};
+    let t = tempfile::tempdir().unwrap();
+    write(&t.path().join("Temp/a/f"), 10);
+    write(&t.path().join("Temp/b/f"), 10);
+    let env = Env { os: "windows".into(), home: None, local_data: Some(t.path().to_path_buf()), data: None, android_sdk_env: None };
+    let temp = list_global_caches_with(&env).into_iter().find(|c| c.id == "temp-win").unwrap();
+    assert!(temp.parts_only && temp.parts.len() == 2);
+}

@@ -9,6 +9,8 @@ Tauri 2 (Rust) backend + React/TypeScript UI. One codebase for macOS, Windows an
 - Clear scope: a banner shows which folders are scanned, a "How it works" panel explains every rule, and the confirm dialog lists the exact folders to be removed.
 - Optional parts: folders that are made of independent pieces (Rust `target/debug` vs `release`, Flutter `build/android` vs `ios`, per-version Gradle and Xcode caches, one simulator, one Flutter SDK...) can be expanded and removed one by one.
 - Table (sortable, filterable by ecosystem / size / idle days / git-safe) and treemap views.
+- "Where it looks" dialog listing every scanned folder and every tool location (AppData on Windows, Library on macOS, ~/.cache on Linux), with found / not installed status.
+- Android SDK (ANDROID_HOME, ANDROID_SDK_ROOT or the OS default) split per platform, build-tools, NDK, CMake, emulator image and sources version.
 - Global caches tab: npm, Cargo, Gradle, Maven, pub, pip, NuGet, Xcode DerivedData, CocoaPods, Homebrew, Android AVDs, old Claude Code versions.
 - Safe deletion: Trash by default, dry-run mode, confirmation, protected paths, only paths from the last scan can be deleted, never home or root, symlinks refused.
 - Settings: scan folders, excluded names, protected paths, per-rule toggles, custom rules, delete mode, depth, theme.

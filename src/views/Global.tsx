@@ -1,8 +1,10 @@
 import { Fragment, useEffect, useState } from "react";
 import { api, fmtBytes, fmtDate, type DeleteOutcome, type GlobalCache, type Settings } from "../api";
 import { Confirm } from "../components/Confirm";
+import { LocationsDialog } from "../components/LocationsDialog";
 
-export function Global({ settings }: { settings: Settings }) {
+export function Global({ settings, onOpenSettings }: { settings: Settings; onOpenSettings: () => void }) {
+  const [showWhere, setShowWhere] = useState(false);
   const [caches, setCaches] = useState<GlobalCache[] | null>(null);
   const [sel, setSel] = useState<Set<string>>(new Set()); // cache ids and part paths
   const [open, setOpen] = useState<Set<string>>(new Set());
@@ -36,7 +38,7 @@ export function Global({ settings }: { settings: Settings }) {
           <h2 className="text-lg font-semibold">Global caches</h2>
           <p className="text-sm text-slate-500">Caches your tools keep in your user folder, outside any project. They are re-downloaded or rebuilt when needed. Expand a cache (▸) to remove just one part, such as a single Gradle version or simulator.</p>
         </div>
-        <button className="btn" onClick={() => { setCaches(null); load(); }}>Refresh</button>
+        <div className="flex gap-2"><button className="btn" onClick={() => setShowWhere(true)}>Where it looks</button><button className="btn" onClick={() => { setCaches(null); load(); }}>Refresh</button></div>
       </div>
       {caches === null ? <p className="text-slate-500">Measuring…</p> : (
         <div className="min-h-0 flex-1 overflow-auto">
@@ -51,11 +53,11 @@ export function Global({ settings }: { settings: Settings }) {
                 return (
                   <Fragment key={c.id}>
                     <tr className="border-b border-slate-100 dark:border-slate-800">
-                      <td className="px-3"><input type="checkbox" checked={sel.has(c.id)} ref={(el) => { if (el) el.indeterminate = some; }} onChange={() => setSel((s) => { const n = flip(s, c.id); c.parts.forEach((p) => n.delete(p.path)); return n; })} /></td>
+                      <td className="px-3"><input type="checkbox" disabled={c.parts_only} title={c.parts_only ? "Choose individual parts instead" : undefined} checked={sel.has(c.id)} ref={(el) => { if (el) el.indeterminate = some; }} onChange={() => setSel((s) => { const n = flip(s, c.id); c.parts.forEach((p) => n.delete(p.path)); return n; })} /></td>
                       <td className="px-3 py-2">
                         <div className="flex items-start gap-1">
                           {c.parts.length > 0 ? <button className="w-4 text-slate-500" onClick={() => setOpen((s) => flip(s, c.id))}>{isOpen ? "▾" : "▸"}</button> : <span className="w-4" />}
-                          <div><div className="font-medium">{c.name}{c.parts.length > 0 && <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-normal dark:bg-slate-700">{c.parts.length} parts</span>}</div><div className="break-all text-xs text-slate-500">{c.path}</div></div>
+                          <div><div className="font-medium">{c.name}{c.parts_only && <span className="ml-2 text-xs font-normal text-amber-600">choose parts</span>}{c.parts.length > 0 && <span className="ml-2 rounded bg-slate-200 px-1.5 py-0.5 text-[10px] font-normal dark:bg-slate-700">{c.parts.length} parts</span>}</div><div className="break-all text-xs text-slate-500">{c.path}</div></div>
                         </div>
                       </td>
                       <td className="px-3 py-2">{c.category}</td>
@@ -85,6 +87,7 @@ export function Global({ settings }: { settings: Settings }) {
         <span className="text-sm">{plan.length} selected · {fmtBytes(bytes)} · {settings.dry_run ? "dry run" : settings.delete_mode === "trash" ? "moves to Trash" : "deletes permanently"}</span>
         <button className="btn btn-danger" disabled={!plan.length} onClick={() => (settings.confirm_before_delete ? setConfirm(true) : run())}>Clean selected</button>
       </div>
+      {showWhere && <LocationsDialog onClose={() => setShowWhere(false)} onOpenSettings={onOpenSettings} />}
       {confirm && (
         <Confirm title="Remove these cache folders?" confirmLabel="Remove" danger onConfirm={run} onCancel={() => setConfirm(false)}>
           <p className="mb-2">{fmtBytes(bytes)} in total. Tools will re-download or rebuild what they need.</p>
