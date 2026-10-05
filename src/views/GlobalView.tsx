@@ -3,7 +3,7 @@ import { api, fmtBytes, fmtDuration, type DeleteOutcome, type GlobalCache, type 
 import { ConfirmDialog, LocationsDialog, ResultDialog, type PlanEntry } from "../components/dialogs";
 import { ScanPanel } from "../components/ScanPanel";
 import { SelectionBar } from "../components/SelectionBar";
-import { GroupHeader, ListHeader, TreeRow, type RowModel } from "../components/Tree";
+import { ExpandToggle, GroupHeader, ListHeader, TreeRow, type RowModel } from "../components/Tree";
 import { useElapsed, type useGlobalScan } from "../hooks/useScans";
 import { Icon } from "../ui/Icon";
 import { Badge, Banner, EmptyState, SkeletonRows, StatCard } from "../ui/primitives";
@@ -53,6 +53,14 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
     for (const c of removable) m.set(c.category, [...(m.get(c.category) ?? []), c]);
     return [...m.entries()].map(([name, list]) => ({ name, list, bytes: list.reduce((s, c) => s + c.disk_bytes, 0) })).sort((a, b) => b.bytes - a.bytes);
   }, [removable]);
+
+  const withParts = sorted.filter((c) => c.parts.length);
+  const groupKeys = [...categories.map((g) => g.name), ...(viewOnly.length ? ["__view"] : [])];
+  const allOpen = groupKeys.every((k) => !collapsed.has(k)) && withParts.every((c) => open.has(c.id));
+  const setAllOpen = (v: boolean) => {
+    setOpen(v ? new Set(withParts.map((c) => c.id)) : new Set());
+    setCollapsed(v ? new Set() : new Set(groupKeys));
+  };
 
   const plan: (PlanEntry & { whole: boolean })[] = removable.flatMap((c): (PlanEntry & { whole: boolean })[] =>
     sel.has(c.id)
@@ -140,7 +148,7 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
       </div>
       {panel}
       {status === "stopped" && <Banner tone="amber" icon="stop" title="Scan stopped" actions={<button className="btn btn-sm" onClick={scan.start}>Scan again</button>}>Results so far are shown. Sizes may be incomplete.</Banner>}
-      <Banner tone="blue" icon="info" title="Remove a whole cache or just one part">Tick a cache, or open its arrow to pick single Gradle versions, SDK platforms or simulators. Rows marked "May be required" explain what breaks.</Banner>
+      <Banner tone="blue" icon="info" title="Remove a whole cache or just one part" actions={<ExpandToggle allOpen={allOpen} onChange={setAllOpen} />}>Tick a cache, or open its arrow to pick single Gradle versions, SDK platforms or simulators. Rows marked "May be required" explain what breaks.</Banner>
 
       <div className="card min-h-0 flex-1 overflow-auto">
         <div className="min-w-[860px]">

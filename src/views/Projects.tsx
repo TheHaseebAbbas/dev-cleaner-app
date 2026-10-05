@@ -4,7 +4,7 @@ import { Details } from "../components/Details";
 import { ConfirmDialog, HelpDialog, LocationsDialog, ResultDialog, type PlanEntry } from "../components/dialogs";
 import { ScanPanel } from "../components/ScanPanel";
 import { SelectionBar } from "../components/SelectionBar";
-import { GroupHeader, ListHeader, TreeRow, type RowModel } from "../components/Tree";
+import { ExpandToggle, GroupHeader, ListHeader, TreeRow, type RowModel } from "../components/Tree";
 import { Treemap } from "../components/Treemap";
 import type { useScan } from "../hooks/useScans";
 import { useElapsed } from "../hooks/useScans";
@@ -111,6 +111,14 @@ export function Projects(props: { scan: ReturnType<typeof useScan>; settings: Se
   const allSelected = selectable.length > 0 && selectable.every((i) => selected.has(i.path));
   const someSelected = selectable.some((i) => selected.has(i.path) || i.parts.some((p) => selected.has(p.path)));
   const toggleAll = () => setSelected(allSelected ? new Set() : new Set(selectable.map((i) => i.path)));
+  const withParts = filtered.filter((i) => i.parts.length);
+  const allOpen = view === "project"
+    ? groups.every((g) => !collapsed.has(g.path)) && withParts.every((i) => expanded.has(i.path))
+    : withParts.every((i) => expanded.has(i.path));
+  const setAllOpen = (open: boolean) => {
+    setExpanded(open ? new Set(withParts.map((i) => i.path)) : new Set());
+    setCollapsed(open ? new Set() : new Set(groups.map((g) => g.path)));
+  };
   const onSort = (k: string) => setSort((s) => ({ key: k as SortKey, desc: s.key === k ? !s.desc : true }));
 
   async function doDelete() {
@@ -237,7 +245,7 @@ export function Projects(props: { scan: ReturnType<typeof useScan>; settings: Se
         <label className="muted flex items-center gap-1.5 text-xs">Min size<input className="input w-16" type="number" min={0} value={minMb} onChange={(e) => setMinMb(Number(e.target.value))} />MB</label>
         <label className="muted flex items-center gap-1.5 text-xs">Idle<input className="input w-16" type="number" min={0} value={minAge} onChange={(e) => setMinAge(Number(e.target.value))} />days</label>
         <label className="flex items-center gap-1.5 text-xs"><input type="checkbox" className="cb" checked={onlyIgnored} onChange={(e) => setOnlyIgnored(e.target.checked)} />Only git-ignored</label>
-        <div className="ml-auto"><Segmented<View> value={view} onChange={setView} options={[{ value: "project", label: "By project", icon: "folder" }, { value: "flat", label: "Flat", icon: "layers" }, { value: "treemap", label: "Map", icon: "box" }]} /></div>
+        <div className="ml-auto flex items-center gap-2">{view !== "treemap" && filtered.length > 0 && <ExpandToggle allOpen={allOpen} onChange={setAllOpen} />}<Segmented<View> value={view} onChange={setView} options={[{ value: "project", label: "By project", icon: "folder" }, { value: "flat", label: "Flat", icon: "layers" }, { value: "treemap", label: "Map", icon: "box" }]} /></div>
       </div>
 
       <div className="flex min-h-0 flex-1 gap-3">

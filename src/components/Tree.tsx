@@ -183,3 +183,13 @@ export function GroupHeader(props: { icon: "folder" | "box"; title: string; sub?
     </div>
   );
 }
+
+/** One button that expands every group and part, or collapses them all again. */
+export function ExpandToggle(props: { allOpen: boolean; onChange: (open: boolean) => void }) {
+  const label = props.allOpen ? "Collapse all" : "Expand all";
+  return (
+    <button className="btn btn-sm" onClick={() => props.onChange(!props.allOpen)} title={props.allOpen ? "Close every group and part" : "Open every group and show all parts"}>
+      <Icon name={props.allOpen ? "chevrons-up" : "chevrons-down"} className="h-3.5 w-3.5" />{label}
+    </button>
+  );
+}

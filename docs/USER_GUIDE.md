@@ -48,6 +48,7 @@ Columns: folder, type, **size on disk**, file count, when the project was last u
 - **By project** groups rows under their project. **Flat** is one sorted list. **Map** is a treemap where area is size.
 - Search by path or type, filter by type, minimum size (MB), minimum idle days, and "only git-ignored".
 - Click a column header to sort.
+- **Expand all / Collapse all** (next to the view switcher) opens or closes every project group and every folder's parts in one click. The button flips to show what the next click does. You can also open a single group or the arrow on a row. The same button is in the Tool caches tab.
 
 ## The Tool caches tab
 Same states as Projects. Results are grouped by category (Node.js, Rust, Android SDK, IDEs, and so on) and sorted by size. Only caches that exist on your computer are shown.
