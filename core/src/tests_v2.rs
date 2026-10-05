@@ -11,6 +11,11 @@ use crate::scanner::*;
 use crate::settings::DeleteMode;
 use std::{fs, path::Path, path::PathBuf, sync::atomic::AtomicBool, time::{Duration, SystemTime}};
 
+/// `path` ends with `suffix`, written with `/`, on every OS.
+fn ends(path: &str, suffix: &str) -> bool {
+    path.replace('\\', "/").ends_with(suffix)
+}
+
 fn write(p: &Path, bytes: usize) {
     fs::create_dir_all(p.parent().unwrap()).unwrap();
     fs::write(p, vec![b'x'; bytes]).unwrap();
@@ -36,10 +41,23 @@ fn age(p: &Path, days: u64) {
     let t = SystemTime::now() - Duration::from_secs(days * 86_400);
     for e in walkdir::WalkDir::new(p).contents_first(true) {
         let e = e.unwrap();
-        if let Ok(f) = fs::File::open(e.path()) {
+        if let Ok(f) = open_for_times(e.path()) {
             let _ = f.set_modified(t);
         }
     }
+}
+
+/// Opens a file or folder so its modified time can be set. Windows needs
+/// FILE_WRITE_ATTRIBUTES, and FILE_FLAG_BACKUP_SEMANTICS to open a folder.
+#[cfg(windows)]
+fn open_for_times(p: &Path) -> std::io::Result<fs::File> {
+    use std::os::windows::fs::OpenOptionsExt;
+    fs::OpenOptions::new().access_mode(0x0100).custom_flags(0x0200_0000).open(p)
+}
+
+#[cfg(not(windows))]
+fn open_for_times(p: &Path) -> std::io::Result<fs::File> {
+    fs::File::open(p)
 }
 
 fn git(dir: &Path, args: &[&str]) {
@@ -107,7 +125,7 @@ fn project_root_follows_repository_and_project_chains() {
     write(&r.join("company/apps/web/package.json"), 5);
     write(&r.join("company/apps/web/node_modules/a.js"), 50);
     let (items, _) = scan_all(&opts(r));
-    let get = |p: &str| items.iter().find(|i| i.path.ends_with(p)).unwrap_or_else(|| panic!("{p} not found"));
+    let get = |p: &str| items.iter().find(|i| ends(&i.path, p)).unwrap_or_else(|| panic!("{p} not found"));
     let android = get("android/app/build");
     assert_eq!(android.rule_id, "gradle-build");
     assert_eq!(android.project_name, "my_app");
@@ -196,7 +214,7 @@ fn signing_keys_block_build_folders_but_package_fixtures_only_warn() {
     write(&r.join("site/.next/standalone/.env"), 50);
     write(&r.join("site/.next/standalone/.env.example"), 50);
     let (items, _) = scan_all(&opts(r));
-    let get = |p: &str| items.iter().find(|i| i.path.ends_with(p)).unwrap();
+    let get = |p: &str| items.iter().find(|i| ends(&i.path, p)).unwrap();
     let build = get("app/build");
     assert_eq!(build.block.as_ref().unwrap().source, BlockSource::Sensitive);
     let nm = get("site/node_modules");
@@ -231,7 +249,7 @@ fn split_and_redesigned_rules() {
     write(&r.join("go/go.mod"), 5);
     write(&r.join("go/vendor/x.go"), 5); // no modules.txt: not a real vendor tree
     let (items, _) = scan_all(&opts(r));
-    let rule = |p: &str| items.iter().find(|i| i.path.ends_with(p)).map(|i| i.rule_id.clone());
+    let rule = |p: &str| items.iter().find(|i| ends(&i.path, p)).map(|i| i.rule_id.clone());
     assert_eq!(rule("game/Library").as_deref(), Some("unity-library"));
     assert_eq!(rule("game/Temp").as_deref(), Some("unity-temp"));
     assert_eq!(rule("ex/_build").as_deref(), Some("elixir-build"));
@@ -256,8 +274,8 @@ fn fingerprint_detects_changes_since_the_scan() {
     write(&r.join("q/node_modules/a.js"), 10);
     let (items, _) = scan_all(&opts(r));
     let target = |i: &Item| Target { id: i.id.clone(), path: PathBuf::from(&i.path), fingerprint: Some(i.fingerprint.clone()), ..Default::default() };
-    let p = items.iter().find(|i| i.path.ends_with("p/node_modules")).unwrap();
-    let q = items.iter().find(|i| i.path.ends_with("q/node_modules")).unwrap();
+    let p = items.iter().find(|i| ends(&i.path, "p/node_modules")).unwrap();
+    let q = items.iter().find(|i| ends(&i.path, "q/node_modules")).unwrap();
     std::thread::sleep(Duration::from_millis(1100));
     write(&r.join("p/node_modules/new-package/x.js"), 10);
     let out = cleaner::execute(&target(p), DeleteMode::Permanent, false, false, &[]);
@@ -313,10 +331,10 @@ fn recommendations_are_conservative_and_explained() {
     write(&r.join("new/package-lock.json"), 5);
     write(&r.join("new/node_modules/a.js"), 2 * 1024 * 1024);
     let (items, _) = scan_all(&opts(r));
-    let old = items.iter().find(|i| i.path.ends_with("old/build")).unwrap();
+    let old = items.iter().find(|i| ends(&i.path, "old/build")).unwrap();
     assert_eq!(old.recommendation.verdict, Verdict::Recommended, "{:?}", old.recommendation);
     assert!(old.recommendation.reasons.iter().any(|x| x.ok && x.text.contains("Not changed")));
-    let new = items.iter().find(|i| i.path.ends_with("new/node_modules")).unwrap();
+    let new = items.iter().find(|i| ends(&i.path, "new/node_modules")).unwrap();
     assert_eq!(new.recommendation.verdict, Verdict::Review);
     assert!(new.recommendation.reasons.iter().any(|x| !x.ok && x.text.contains("Project changed")));
     assert!(old.recommendation.score > new.recommendation.score);
