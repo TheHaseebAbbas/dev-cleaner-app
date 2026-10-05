@@ -587,7 +587,7 @@ dependencies = [
 
 [[package]]
 name = "dev-cleaner-app"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "dev_cleaner_core",
  "fs2",
@@ -600,7 +600,7 @@ dependencies = [
 
 [[package]]
 name = "dev_cleaner_core"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "dirs",
  "rayon",
