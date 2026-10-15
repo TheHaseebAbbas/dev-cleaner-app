@@ -25,3 +25,5 @@ mod tests_v2;
 mod tests_v3;
 #[cfg(test)]
 mod tests_groups;
+#[cfg(test)]
+mod tests_settings;

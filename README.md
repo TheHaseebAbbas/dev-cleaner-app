@@ -13,9 +13,10 @@ A desktop app that finds and removes the junk developer tools leave behind: `nod
 | **Clean** | The start page. One **Scan** checks your projects and your tools' caches together and sorts everything into **Safe to clean**, **Worth a look** and **Leaving alone**, each with one line saying why. Safe to clean is open and ticked; one button moves it to the Trash, and **Undo** puts it back. |
 | **Projects** | Scans your code folders and lists every rebuildable folder with size, its group (Safe to clean, Worth a look, Leaving alone) and one line saying why. The safe ones are ticked for you after a scan. Folders made of independent pieces expand into sub-items you can remove one by one. |
 | **Tools & SDKs** | Measures caches and SDKs in your user folder (npm, Cargo, Gradle, Android SDK, Xcode, JetBrains, VS Code caches and more), grouped by ecosystem. A **Dependency map** view shows which installed SDK and toolchain versions your projects use, and which they need but are missing. Docker and WSL disks are shown view-only. |
-| **Trash** | Everything Dev Cleaner moved to the Trash, with **Restore** and **Delete forever**, an auto-clear timer, and a per-item **Keep longer** option. |
-| **History** | Every cleanup, with the total space reclaimed and an **Over time** chart of what was reclaimed per month. |
-| **Settings** | An overview that opens into Appearance, Cleaning (with recommendations and scheduled cleanup), Safety, Scanning, Protection, Rules (with a **Test** for custom rules), Trash and About (with diagnostics). |
+| **Activity** | Every cleanup, newest first, with **Restore** for whatever is still in the Trash. With advanced tools on, **Manage Trash** adds **Delete forever** and per-item **Keep longer**, and **Report** shows the full history with an **Over time** chart. |
+| **Settings** | One page: **Folders** (project and protected folders), **Cleaning** (Trash or permanent, how long the Trash keeps items, scheduled cleanup) and **Appearance** (theme, **Show advanced tools**). With advanced tools on, the full Safety, Scanning, Rules (with a **Test** for custom rules), Trash and About sections are listed below. |
+
+The sidebar shows **Clean**, **Activity** and **Settings**. **More** opens Projects, Tools & SDKs, the storage map, the dependency map and cleanup rules. **Show advanced tools** (in Settings, or **More**) keeps Projects and Tools & SDKs in the sidebar. It changes only what you see, never what can be removed.
 
 Folders that a running program uses (a dev server, a Gradle daemon, an emulator, or a locked file on Windows) are marked **In use now** and need confirmation. Folders inside a pnpm, npm, Yarn, Cargo, Gradle, Go, Dart or Melos workspace are grouped under the workspace root.
 

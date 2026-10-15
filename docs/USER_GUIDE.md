@@ -16,7 +16,7 @@
 
 ## Getting around
 
-The sidebar groups the app into **Clean** (Clean, Projects, Tools & SDKs), **Manage** (Trash, History) and **Configure** (Settings). The bottom of the sidebar shows free disk space, an amber **Dry run** note when nothing will be deleted, and **Commands**.
+The sidebar shows **Clean**, **Activity** and **Settings**, and **More**, which opens Projects, Tools & SDKs, the storage map, the dependency map and cleanup rules. Turn on **Settings → Appearance → Show advanced tools** to keep Projects and Tools & SDKs in the sidebar and see every setting; this changes only what is shown, never what can be removed. The bottom of the sidebar shows when you last cleaned, free disk space, an amber **Dry run** note when nothing will be deleted, and **Commands**.
 
 | Shortcut | Action |
 | --- | --- |
@@ -131,14 +131,16 @@ In **Move to Trash** mode (the default) folders go to your operating system's Tr
 
 | System | Where | Open it |
 | --- | --- | --- |
-| Windows | Recycle Bin | Desktop icon, or the **Open** button in the Trash page |
+| Windows | Recycle Bin | Desktop icon, or **Open** in Activity → Manage Trash |
 | macOS | `~/.Trash` (the Trash in the Dock) | Dock, or **Open** |
 | Linux | `~/.local/share/Trash` (on other drives, a `.Trash-<id>` folder at the drive root) | File manager, or **Open** |
 
 In **Delete permanently** mode nothing goes to the Trash and it cannot be undone.
 
-### The Trash page (Windows and Linux)
-Lists the folders Dev Cleaner removed, newest first: size, when they were removed, where they will be restored to, and when they will be cleared automatically.
+### Activity (Windows and Linux)
+**Activity** lists every cleanup, newest first: how many items, how much, and how many are still in the Trash. **Restore** on a cleanup puts back everything from it that is still in the Trash; open **Show items** to restore one at a time. Restore never replaces a folder that exists again at the original path; that item is reported and left in the Trash.
+
+With advanced tools on, **Manage Trash** lists the folders themselves: size, when they were removed, where they will be restored to, and when they will be cleared automatically.
 
 - **Restore** (per row, or **Restore selected**) puts the folder back at its original path. If something already exists there, or the parent folder is gone, the result dialog explains and nothing is lost.
 - **Delete forever** removes the selected items from the Trash for good, after a confirmation.
@@ -146,13 +148,13 @@ Lists the folders Dev Cleaner removed, newest first: size, when they were remove
 - After restoring, rescan so the folder appears in the list again.
 
 ### Automatic clearing
-**Settings → Trash → Clear automatically after** sets how many days items stay (Never, 7, 14, 30, 90, or any number; default 30). The app checks when it opens and every hour while it is running, and removes only items older than that. Items already restored are not affected. Set it to 0 / Never to keep everything until you delete it yourself. The Trash page shows each item's remaining time. To keep one item longer, press **Change** in its Auto-clear column and pick 30 or 90 more days, or *Until I delete it*. The app has to be running for cleanup to happen.
+**Settings → Cleaning → Empty from the Trash after** sets how many days items stay (Never, 7, 30 or 90 days; any number in the advanced Trash section; default 30). The app checks when it opens and every hour while it is running, and removes only items older than that. Items already restored are not affected. Set it to 0 / Never to keep everything until you delete it yourself. Manage Trash shows each item's remaining time. To keep one item longer, press **Change** in its Auto-clear column and pick 30 or 90 more days, or *Until I delete it*. The app has to be running for cleanup to happen.
 
 ### macOS
-macOS does not let apps list or restore the Trash, so the Trash page only offers **Open Trash**. In Finder, right-click an item and choose **Put Back**. Auto-clear is not available; use Finder's "Remove items from the Trash after 30 days" setting (Finder → Settings → Advanced) instead.
+macOS does not let apps list or restore the Trash, so Activity lists your cleanups and offers **Open Trash** instead of Restore. In Finder, right-click an item and choose **Put Back**. Auto-clear is not available; use Finder's "Remove items from the Trash after 30 days" setting (Finder → Settings → Advanced) instead.
 
 ## History
-Every removal is logged with time, path, project, kind, how it was removed and the estimated space freed. The top shows the total reclaimed. Open **Over time** for the space reclaimed per month over the last year, the kinds of folders that freed the most, and how the reclaimable total changed between scans.
+Activity shows every cleanup. With advanced tools on, **Report** lists every removal with time, path, project, kind, how it was removed and the estimated space freed. The top shows the total reclaimed. Open **Over time** for the space reclaimed per month over the last year, the kinds of folders that freed the most, and how the reclaimable total changed between scans.
 
 ## Scheduled cleanup
 Off by default. Turn it on in **Settings → Cleaning → Scheduled cleanup**. While the app is open it rescans your project folders every day, week, two weeks or month. It then tells you what could be reclaimed, or, if you chose *Move to Trash*, moves the items that need no confirmation to the Trash. It never deletes permanently.
