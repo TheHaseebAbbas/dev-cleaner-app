@@ -282,17 +282,50 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
   };
 
   if (section === null) {
+    const retentionPreset = RETENTION_PRESETS.includes(s.trash_retention_days);
     return (
       <div className="h-full overflow-auto pb-6">
         <PageHeader title="Settings" subtitle="Changes are saved automatically." />
-        <div className="max-w-3xl overflow-hidden rounded-[10px] border bg-white divider dark:bg-slate-900">
-          {ORDER.map((id) => (
+        <div className="max-w-3xl space-y-4">
+          <Sub title="Folders" hint="Where your projects live, and what Dev Cleaner must never touch. Tools & SDKs are found without any setup.">
+            <PathList title="Project folders" hint="Only these are searched for projects." values={s.scan_roots} onChange={(v) => set("scan_roots", v)} pick placeholder="C:\development or ~/code" />
+            <PathList title="Protected folders" hint="Shown in results but never selected. Use it for projects you work on every day." values={s.protected_paths} onChange={(v) => set("protected_paths", v)} pick placeholder="path to protect" />
+          </Sub>
+          <Sub title="Cleaning">
+            <Field label="When cleaning" hint="Trash lets you put things back from Activity. Permanent frees the space at once.">
+              <Segmented value={s.delete_mode} onChange={(v) => set("delete_mode", v)} options={[{ value: "trash", label: "Move to Trash" }, { value: "permanent", label: "Delete permanently" }]} />
+            </Field>
+            {s.delete_mode === "trash" && (
+              <Field label="Empty from the Trash after" hint="Only items Dev Cleaner moved there. You can keep single items longer from Activity.">
+                <Segmented value={retentionPreset ? String(s.trash_retention_days) : "custom"} onChange={(v) => v !== "custom" && set("trash_retention_days", Number(v))}
+                  options={[{ value: "0", label: "Never" }, { value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }, ...(retentionPreset ? [] : [{ value: "custom", label: `${s.trash_retention_days} days` }])]} />
+              </Field>
+            )}
+          </Sub>
+          <ScheduleSection s={s} set={set} />
+          <Sub title="Appearance">
+            <Field label="Theme" hint="System follows your operating system.">
+              <Segmented value={s.theme} onChange={(v) => set("theme", v)} options={[{ value: "system", label: "System" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} />
+            </Field>
+            <Toggle checked={s.show_advanced} onChange={(v) => set("show_advanced", v)} label="Show advanced tools"
+              description="Adds the Projects and Tools & SDKs pages with filters, maps and single parts, and every setting below. It changes only what you see, never what can be removed." />
+          </Sub>
+          {s.show_advanced ? (
+            <>
+              <div className="pt-2 text-[13px] font-semibold">Advanced settings</div>
+              <div className="overflow-hidden rounded-[10px] border bg-white divider dark:bg-slate-900">
+                {ORDER.map((id) => (
             <button key={id} onClick={() => setSection(id)} className="flex w-full items-center gap-3 border-b px-4 py-3 text-left outline-none last:border-0 divider transition-colors hover:bg-slate-50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-indigo-500 dark:hover:bg-slate-800/50">
               <Icon name={META[id].icon} className="h-[18px] w-[18px] text-slate-500 dark:text-slate-400" />
               <div className="min-w-0 flex-1"><div className="font-medium">{META[id].title}</div><div className="muted truncate text-[13px]">{summary[id]}</div></div>
               <Icon name="chevron-right" className="h-4 w-4 shrink-0 text-slate-400" />
             </button>
-          ))}
+                ))}
+              </div>
+            </>
+          ) : (
+            <button onClick={() => setSection("about")} className="muted flex items-center gap-1.5 text-[13px] hover:text-slate-900 dark:hover:text-white"><Icon name="info" className="h-4 w-4" />About Dev Cleaner · version {__APP_VERSION__}</button>
+          )}
         </div>
       </div>
     );
@@ -391,7 +424,7 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
 
         {section === "trash" && (
           <Group>
-            <Field label="Clear automatically after" hint="Folders Dev Cleaner moved to the Trash are deleted for good after this many days. You can keep single folders longer from the Trash screen.">
+            <Field label="Clear automatically after" hint="Folders Dev Cleaner moved to the Trash are deleted for good after this many days. You can keep single folders longer from Activity, Manage Trash.">
               <div className="flex flex-col items-end gap-2">
                 <Segmented value={String(RETENTION_PRESETS.includes(s.trash_retention_days) ? s.trash_retention_days : "custom")} onChange={(v) => v !== "custom" && set("trash_retention_days", Number(v))}
                   options={[{ value: "0", label: "Never" }, { value: "7", label: "7 days" }, { value: "14", label: "14 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }, { value: "custom", label: "Custom" }]} />

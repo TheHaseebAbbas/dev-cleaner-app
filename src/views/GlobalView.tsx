@@ -131,6 +131,7 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
 
   useCmd((cmd) => {
     if (cmd === "scan") { scanning ? scan.stop() : scan.start(); }
+    else if (cmd === "dependency-map") setView("map");
     else if (cmd === "select-all") setSel((s) => (s.size ? new Set() : new Set(removable.filter((c) => !c.parts_only && !c.block && !c.parts.some((p) => p.block)).map((c) => c.id))));
     else if (cmd === "delete") { if (plan.length && !cleanBlocked && !busy) clean(); }
     else if (cmd === "escape") { if (focus) setFocus(null); else if (sel.size) setSel(new Set()); else return false; }

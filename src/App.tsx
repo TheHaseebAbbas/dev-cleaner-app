@@ -1,25 +1,29 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, fmtBytes, type DeleteReport, type RunSummary, type Settings } from "./api";
+import { api, fmtAge, fmtBytes, type DeleteReport, type RunSummary, type Settings } from "./api";
 import { CommandPalette, type PaletteCommand } from "./components/CommandPalette";
 import { emitCmd } from "./hooks/commands";
 import { useGlobalScan, useScan } from "./hooks/useScans";
 import { Icon, type IconName } from "./ui/Icon";
-import { Spinner, Toast } from "./ui/primitives";
+import { Popover, Spinner, Toast } from "./ui/primitives";
 import { GlobalView } from "./views/GlobalView";
 import { CleanView } from "./views/CleanView";
-import { History } from "./views/History";
-import { TrashView } from "./views/TrashView";
+import { ActivityView } from "./views/ActivityView";
 import { Projects } from "./views/Projects";
 import { SettingsView, type SectionId } from "./views/SettingsView";
 
-type Tab = "clean" | "projects" | "global" | "trash" | "history" | "settings";
-const GROUPS: { label: string; tabs: { id: Tab; label: string; icon: IconName }[] }[] = [
-  { label: "Clean", tabs: [{ id: "clean", label: "Clean", icon: "check-circle" }, { id: "projects", label: "Projects", icon: "folder" }, { id: "global", label: "Tools & SDKs", icon: "database" }] },
-  { label: "Manage", tabs: [{ id: "trash", label: "Trash", icon: "trash" }, { id: "history", label: "History", icon: "clock" }] },
-  { label: "Configure", tabs: [{ id: "settings", label: "Settings", icon: "sliders" }] },
-];
+type Tab = "clean" | "projects" | "global" | "activity" | "settings";
+type NavTab = { id: Tab; label: string; icon: IconName };
+const CLEAN: NavTab = { id: "clean", label: "Clean", icon: "check-circle" };
+const PROJECTS: NavTab = { id: "projects", label: "Projects", icon: "folder" };
+const TOOLS: NavTab = { id: "global", label: "Tools & SDKs", icon: "database" };
+const ACTIVITY: NavTab = { id: "activity", label: "Activity", icon: "clock" };
+const SETTINGS: NavTab = { id: "settings", label: "Settings", icon: "sliders" };
+/** Advanced shows every page; otherwise three, with the rest one click away under More. */
+const navGroups = (advanced: boolean): { label?: string; tabs: NavTab[] }[] => advanced
+  ? [{ label: "Clean", tabs: [CLEAN, PROJECTS, TOOLS] }, { label: "Manage", tabs: [ACTIVITY] }, { label: "Configure", tabs: [SETTINGS] }]
+  : [{ tabs: [CLEAN, ACTIVITY, SETTINGS] }];
 
 const ONBOARDED = "dc.onboarded";
 const wasOnboarded = () => { try { return localStorage.getItem(ONBOARDED) === "1"; } catch { return false; } };
@@ -74,6 +78,11 @@ export default function App() {
   const globalScan = useGlobalScan();
   const launched = useRef(false);
   const refreshDisk = useCallback(() => { api.diskSpace().then(setDisk).catch(() => {}); }, []);
+  const [lastClean, setLastClean] = useState<number | null>(null);
+  const refreshLast = useCallback(() => {
+    api.getHistory().then((h) => setLastClean(h.filter((e) => e.result === "removed").reduce<number | null>((m, e) => Math.max(m ?? 0, e.timestamp), null))).catch(() => {});
+  }, []);
+  useEffect(() => { refreshLast(); }, [refreshLast]);
 
   useEffect(() => { api.getSettings().then(setSettings); refreshDisk(); }, [refreshDisk]);
   useEffect(() => {
@@ -120,7 +129,8 @@ export default function App() {
     if (r.dry_run) return;
     scan.refresh();
     refreshDisk();
-  }, [scan, refreshDisk]);
+    refreshLast();
+  }, [scan, refreshDisk, refreshLast]);
 
   const goScan = useCallback((t: Tab) => { setTab(t); emitCmd("scan"); }, []);
   const toggleTheme = () => settings && updateSettings({ ...settings, theme: document.documentElement.classList.contains("dark") ? "light" : "dark" });
@@ -130,9 +140,10 @@ export default function App() {
     { id: "scan-all", label: "Scan everything", hint: "Ctrl/Cmd+R", icon: "refresh", run: () => goScan("clean") },
     { id: "scan-projects", label: "Scan projects", icon: "folder", run: () => goScan("projects") },
     { id: "scan-tools", label: "Scan tools & SDKs", icon: "database", run: () => goScan("global") },
-    { id: "map", label: "Open storage map", icon: "map", run: () => { setTab("projects"); emitCmd("storage-map"); } },
-    { id: "trash", label: "Open Trash", icon: "trash", run: () => setTab("trash") },
-    { id: "history", label: "Open History", icon: "clock", run: () => setTab("history") },
+    { id: "map", label: "Open storage map", icon: "map", run: () => { setTab("projects"); setTimeout(() => emitCmd("storage-map"), 0); } },
+    { id: "activity", label: "Open Activity (Trash and History)", icon: "clock", run: () => setTab("activity") },
+    { id: "deps", label: "Open dependency map", icon: "layers", run: () => { setTab("global"); setTimeout(() => emitCmd("dependency-map"), 0); } },
+    { id: "advanced", label: settings.show_advanced ? "Hide advanced tools" : "Show advanced tools", icon: "sliders", run: () => updateSettings({ ...settings, show_advanced: !settings.show_advanced }) },
     { id: "settings", label: "Open Settings", hint: "Ctrl/Cmd+,", icon: "sliders", run: () => { setSection(null); setTab("settings"); } },
     { id: "rules", label: "Cleanup rules", icon: "layers", run: () => { setSection("rules"); setTab("settings"); } },
     { id: "theme", label: "Toggle dark mode", icon: "eye", run: toggleTheme },
@@ -166,6 +177,22 @@ export default function App() {
       onDone={() => { markOnboarded(); setOnboarded(true); if (settings.scan_roots.length) setTimeout(() => emitCmd("scan"), 0); }} />;
   }
 
+  const advanced = settings.show_advanced;
+  const groups = navGroups(advanced);
+  const navClass = (on: boolean) => `flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 ${on ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"}`;
+  const navButton = (t: NavTab) => (
+    <button key={t.id} onClick={() => { if (t.id === "settings") setSection(null); setTab(t.id); }} aria-current={tab === t.id ? "page" : undefined} className={navClass(tab === t.id)}>
+      <Icon name={t.icon} className="h-4 w-4" />{t.label}
+      {busy(t.id) && <span className="ml-auto flex items-center" title="Scanning…" aria-label="Scanning"><Spinner className="h-3.5 w-3.5" /></span>}
+    </button>
+  );
+  const MORE: { label: string; hint: string; icon: IconName; run: () => void }[] = [
+    { label: "Projects", hint: "Every folder found, with filters", icon: "folder", run: () => setTab("projects") },
+    { label: "Tools & SDKs", hint: "Caches and SDKs by ecosystem", icon: "database", run: () => setTab("global") },
+    { label: "Storage map", hint: "What takes the most space", icon: "map", run: () => { setTab("projects"); setTimeout(() => emitCmd("storage-map"), 0); } },
+    { label: "Dependency map", hint: "Which projects use which SDK versions", icon: "layers", run: () => { setTab("global"); setTimeout(() => emitCmd("dependency-map"), 0); } },
+    { label: "Cleanup rules", hint: "Turn rules on or off, add your own", icon: "sliders", run: () => { setSection("rules"); setTab("settings"); } },
+  ];
   const busy = (id: Tab) => (id === "clean" && (scan.status === "scanning" || globalScan.status === "scanning")) || (id === "projects" && scan.status === "scanning") || (id === "global" && globalScan.status === "scanning");
   const usedFrac = disk ? 1 - disk[1] / disk[0] : 0;
   const openSettings = () => { setSection(null); setTab("settings"); };
@@ -177,23 +204,44 @@ export default function App() {
           <div className="text-[15px] font-semibold leading-tight tracking-tight">Dev Cleaner</div>
         </div>
         <div className="flex-1 space-y-4 overflow-auto">
-          {GROUPS.map((g) => (
-            <div key={g.label}>
-              <div className="muted mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider">{g.label}</div>
-              {g.tabs.map((t) => (
-                <button key={t.id} onClick={() => { if (t.id === "settings") setSection(null); setTab(t.id); }} aria-current={tab === t.id ? "page" : undefined}
-                  className={`flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-left text-[13px] font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-indigo-500 ${tab === t.id ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-200" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"}`}>
-                  <Icon name={t.icon} className="h-4 w-4" />{t.label}
-                  {busy(t.id) && <span className="ml-auto flex items-center" title="Scanning…" aria-label="Scanning"><Spinner className="h-3.5 w-3.5" /></span>}
-                </button>
-              ))}
+          {groups.map((g, gi) => (
+            <div key={g.label ?? gi}>
+              {g.label && <div className="muted mb-1 px-3 text-[11px] font-semibold uppercase tracking-wider">{g.label}</div>}
+              {g.tabs.map(navButton)}
             </div>
           ))}
+          {!advanced && (
+            <div>
+              {/* An advanced page opened from More stays in the sidebar while it is open. */}
+              {[PROJECTS, TOOLS].filter((t) => t.id === tab).map(navButton)}
+              <Popover label="More" icon="more" width="w-64" triggerClass={`${navClass(false)} [&>svg]:h-4 [&>svg]:w-4`}>
+                {(close) => (
+                  <div className="-m-2 text-[13px]">
+                    {MORE.map((m) => (
+                      <button key={m.label} className="flex w-full items-start gap-2.5 rounded-md px-2 py-1.5 text-left hover:bg-slate-100 dark:hover:bg-slate-700/60" onClick={() => { close(); m.run(); }}>
+                        <Icon name={m.icon} className="mt-0.5 h-4 w-4 shrink-0 text-slate-500" />
+                        <span><span className="block font-medium">{m.label}</span><span className="muted block text-xs">{m.hint}</span></span>
+                      </button>
+                    ))}
+                    <div className="mt-1 border-t px-2 pb-1 pt-2 text-xs divider">
+                      <button className="font-medium text-indigo-600 hover:underline dark:text-indigo-300" onClick={() => { close(); updateSettings({ ...settings, show_advanced: true }); }}>Show advanced tools</button>
+                      <span className="muted"> keeps these in the sidebar.</span>
+                    </div>
+                  </div>
+                )}
+              </Popover>
+            </div>
+          )}
         </div>
         <div className="space-y-3 px-1 pt-3 text-xs">
           {settings.dry_run && (
             <button onClick={() => { setSection("cleaning"); setTab("settings"); }} className="flex w-full items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-2 text-left text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-300" title="Change in Settings, Cleaning">
               <Icon name="shield" className="mt-0.5 h-3.5 w-3.5" /><span><b className="font-semibold">Dry run</b><br />Nothing will be deleted</span>
+            </button>
+          )}
+          {lastClean && (
+            <button className="muted flex w-full items-center gap-1.5 rounded px-1 py-0.5 text-left hover:text-slate-900 dark:hover:text-white" onClick={() => setTab("activity")} title="Open Activity">
+              <Icon name="clock" className="h-3.5 w-3.5" />Last cleaned {fmtAge(lastClean)}
             </button>
           )}
           {disk && (
@@ -210,8 +258,7 @@ export default function App() {
         {tab === "clean" && <CleanView scan={scan} globalScan={globalScan} settings={settings} onOpenSettings={openSettings} onDeleted={onDeleted} />}
         {tab === "projects" && <Projects scan={scan} settings={settings} onChangeSettings={updateSettings} onOpenSettings={openSettings} onDeleted={onDeleted} />}
         {tab === "global" && <GlobalView scan={globalScan} settings={settings} onOpenSettings={openSettings} onDeleted={onDeleted} />}
-        {tab === "trash" && <TrashView settings={settings} onOpenSettings={openSettings} onChanged={refreshDisk} />}
-        {tab === "history" && <History />}
+        {tab === "activity" && <ActivityView settings={settings} onOpenSettings={() => { setSection(advanced ? "trash" : null); setTab("settings"); }} onChanged={() => { refreshDisk(); refreshLast(); }} />}
         {tab === "settings" && <SettingsView settings={settings} onChange={updateSettings} section={section} onSection={setSection} />}
       </main>
       {palette && <CommandPalette commands={commands} onClose={() => setPalette(false)} />}

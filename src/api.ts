@@ -177,6 +177,8 @@ export interface Settings {
   show_reclaim_estimate: boolean;
   show_network_recovery_cost: boolean;
   schedule: Schedule;
+  /** Show the Projects and Tools & SDKs pages and every setting. Display only. */
+  show_advanced: boolean;
 }
 
 export interface GlobalCache {

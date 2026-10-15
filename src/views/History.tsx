@@ -44,10 +44,10 @@ function OverTime() {
   );
 }
 
-export function History() {
+export function History({ embedded }: { embedded?: boolean } = {}) {
   const [rows, setRows] = useState<HistoryEntry[] | null>(null);
   useEffect(() => { api.getHistory().then((r) => setRows([...r].reverse())).catch(() => setRows([])); }, []);
-  const head = <PageHeader title="History" subtitle="Everything Dev Cleaner has removed." />;
+  const head = embedded ? null : <PageHeader title="History" subtitle="Everything Dev Cleaner has removed." />;
   if (!rows) return <div>{head}<div className="overflow-hidden rounded-[10px] border divider"><SkeletonRows rows={4} /></div></div>;
   if (!rows.length) return <div>{head}<div className="rounded-[10px] border divider"><EmptyState icon="clock" title="No cleanups yet" description="Everything you remove is listed here, with when it happened and how much space it freed." /></div></div>;
   const total = rows.reduce((s, r) => s + r.estimated_reclaimed, 0);

@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 
 /** Commands that the app shell (keyboard shortcuts, command palette) sends to whichever view is open. */
-export type Cmd = "scan" | "select-all" | "escape" | "delete" | "storage-map" | "focus-search";
+export type Cmd = "scan" | "select-all" | "escape" | "delete" | "storage-map" | "dependency-map" | "focus-search";
 
 let pending: Cmd | null = null;
 

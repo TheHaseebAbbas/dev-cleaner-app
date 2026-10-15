@@ -307,8 +307,8 @@ export function CleanView(props: {
           })}
         </div>
         {focusRow && (focusRow.src === "p"
-          ? <Details item={focusRow.item} settings={settings} onClose={() => setFocus(null)} brief />
-          : <Details cache={focusRow.cache} settings={settings} onClose={() => setFocus(null)} brief />)}
+          ? <Details item={focusRow.item} settings={settings} onClose={() => setFocus(null)} brief={!settings.show_advanced} />
+          : <Details cache={focusRow.cache} settings={settings} onClose={() => setFocus(null)} brief={!settings.show_advanced} />)}
       </div>
 
       {result && !busy && <CleanupNotice report={result} noun="item" onDetails={() => setResultOpen(true)} onClose={() => setResult(null)} onUndo={undo} />}

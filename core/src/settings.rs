@@ -61,6 +61,9 @@ pub struct Settings {
     pub show_network_recovery_cost: bool,
     /// Scheduled scan and cleanup (off by default).
     pub schedule: crate::schedule::Schedule,
+    /// Show the Projects and Tools & SDKs pages and every setting. Only changes what is shown,
+    /// never what can be deleted.
+    pub show_advanced: bool,
 }
 
 impl Default for Settings {
@@ -94,6 +97,7 @@ impl Default for Settings {
             show_reclaim_estimate: true,
             show_network_recovery_cost: true,
             schedule: crate::schedule::Schedule::default(),
+            show_advanced: false,
         }
     }
 }
@@ -149,7 +153,9 @@ impl Settings {
     /// Identifies the settings that affect scan results.
     pub fn hash(&self) -> String {
         let mut h = std::collections::hash_map::DefaultHasher::new();
-        std::hash::Hash::hash(&serde_json::to_string(self).unwrap_or_default(), &mut h);
+        // What is shown does not change what a scan finds.
+        let scan = Settings { show_advanced: false, ..self.clone() };
+        std::hash::Hash::hash(&serde_json::to_string(&scan).unwrap_or_default(), &mut h);
         format!("{:016x}", std::hash::Hasher::finish(&h))
     }
 }

@@ -55,7 +55,7 @@ export function ConfirmDialog(props: { entries: PlanEntry[]; preview: Preview | 
               <p className="mt-1 text-[13px]">The selected {noun}s may be required by your development tools and will need to be generated or downloaded again. {amount} will be reclaimed from {plural}.</p>
             </>
           ) : (
-            <p className="text-[13px]">Moves <b className="tabular-nums">{amount}</b>{st.show_reclaim_estimate ? " (estimate)" : ""} to the Trash. You can restore them from Trash; the space comes back when the Trash is emptied.</p>
+            <p className="text-[13px]">Moves <b className="tabular-nums">{amount}</b>{st.show_reclaim_estimate ? " (estimate)" : ""} to the Trash. You can put them back from Activity; the space comes back when the Trash is emptied.</p>
           )}
           {st.show_network_recovery_cost && pv.download_bytes > 0 && <p className="muted mt-1.5 text-xs">Getting them back may download up to {fmtBytes(pv.download_bytes)}.</p>}
           {stale && <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300"><Icon name="clock" className="h-3.5 w-3.5" />This scan is {staleMin} minutes old. Each {noun} is checked again before it is removed.</p>}

@@ -14,7 +14,13 @@ Settings save automatically a moment after you change them. Open the **Settings*
 
 ## Every setting
 
-Settings opens as a list of sections (Appearance, Cleaning, Safety, Scanning, Protection, Rules, Trash, About) with a one-line summary of each. Click a section to edit it; changes save automatically. Safety has a few switches and lists the protections that are always on. In Rules you can search, see each rule's details (folder names, marker files, how it comes back, risk, costs, confidence), test custom rules and add your own. **About** shows the version, where your data lives, and diagnostics of the last scans and cleanups.
+Settings opens as one page with three sections:
+
+- **Folders**: project folders (`scan_roots`) and protected folders (`protected_paths`).
+- **Cleaning**: Move to Trash or Delete permanently (`delete_mode`), how long the Trash keeps items (`trash_retention_days`), and scheduled cleanup (`schedule`).
+- **Appearance**: theme (`theme`) and **Show advanced tools** (`show_advanced`, off by default).
+
+**Show advanced tools** keeps Projects and Tools & SDKs in the sidebar and lists the full sections below the three: Appearance, Cleaning, Safety, Scanning, Protection, Rules, Trash and About, each with a one-line summary. It only changes what is shown. Every setting keeps working while it is off, and upgrading from 1.x keeps every value you had. Click a section to edit it; changes save automatically. Safety has a few switches and lists the protections that are always on. In Rules you can search, see each rule's details (folder names, marker files, how it comes back, risk, costs, confidence), test custom rules and add your own. **About** shows the version, where your data lives, and diagnostics of the last scans and cleanups.
 
 Sections appear in this order in the app.
 
@@ -68,7 +74,7 @@ The protections that are always on are listed in [Safety](SAFETY.md).
 | --- | --- | --- | --- |
 | **Clear automatically after** (`trash_retention_days`) | 30 days | Items Dev Cleaner moved to the Trash are deleted for good after this many days. 0 means never. | 7 to 14 days on a small disk, 30 days as a safety net, 0 if you want to review everything yourself. Not available on macOS. |
 
-Single items can be kept longer from the Trash page (**Change** in the Auto-clear column: 30 or 90 more days, or until you delete it). These holds are stored in `trash_holds.json`.
+Single items can be kept longer from Activity → Manage Trash (**Change** in the Auto-clear column: 30 or 90 more days, or until you delete it). These holds are stored in `trash_holds.json`.
 
 See [the Trash tab](USER_GUIDE.md#where-removed-folders-go-and-getting-them-back) to restore or delete items now.
 
@@ -207,4 +213,4 @@ Custom rules are never more than Medium confidence, so their matches land in Wor
 Press **Test** next to a custom rule (or on the form before saving) to scan your folders with only that rule. It lists how many folders match, their total size (measured for up to 500 matches), up to 20 examples, and which matches another rule already covers or are blocked. Nothing is selected or removed. A new rule shows **Not used yet** until its first cleanup, which asks you to confirm.
 
 ## Editing settings.json by hand
-The file is in the data folder listed in the [User guide](USER_GUIDE.md#where-your-data-is-stored). Close the app first. Fields: `scan_roots`, `exclude_names`, `protected_paths`, `rule_enabled`, `custom_rules`, `delete_mode` (`"trash"` or `"permanent"`), `dry_run`, `confirm_before_delete`, `min_size_mb`, `min_age_days`, `max_depth`, `theme` (`"system"`, `"light"`, `"dark"`), `scan_on_launch`, `trash_retention_days`, `recommendations_enabled`, `protect_git_tracked`, `detect_sensitive_files`, `minimum_recommendation_confidence` (`"medium"`, `"high"`, `"very_high"`), `default_cleanup_profile` (`"safe"`, `"recommended"`, `"deep"`), `activity_mode` (`"fast"`, `"accurate"`), `stale_scan_minutes`, `require_rescan_before_cleanup`, `allow_danger_custom_rules`. Custom rule risks are `"safe"`, `"caution"` or `"danger"`; the old `"low"`, `"medium"` and `"high"` still load. Missing fields use defaults, so you can delete the file to start over.
+The file is in the data folder listed in the [User guide](USER_GUIDE.md#where-your-data-is-stored). Close the app first. Fields: `scan_roots`, `exclude_names`, `protected_paths`, `rule_enabled`, `custom_rules`, `delete_mode` (`"trash"` or `"permanent"`), `dry_run`, `confirm_before_delete`, `min_size_mb`, `min_age_days`, `max_depth`, `theme` (`"system"`, `"light"`, `"dark"`), `scan_on_launch`, `trash_retention_days`, `recommendations_enabled`, `protect_git_tracked`, `detect_sensitive_files`, `minimum_recommendation_confidence` (`"medium"`, `"high"`, `"very_high"`), `default_cleanup_profile` (`"safe"`, `"recommended"`, `"deep"`), `activity_mode` (`"fast"`, `"accurate"`), `stale_scan_minutes`, `require_rescan_before_cleanup`, `allow_danger_custom_rules`, `detect_active_usage`, `show_reclaim_estimate`, `show_network_recovery_cost`, `schedule`, `show_advanced`. Custom rule risks are `"safe"`, `"caution"` or `"danger"`; the old `"low"`, `"medium"` and `"high"` still load. Missing fields use defaults, so you can delete the file to start over.

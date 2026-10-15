@@ -30,7 +30,7 @@ function AutoClear({ entry, retention, onHold }: { entry: TrashEntry; retention:
   );
 }
 
-export function TrashView(props: { settings: Settings; onOpenSettings: () => void; onChanged: () => void }) {
+export function TrashView(props: { settings: Settings; onOpenSettings: () => void; onChanged: () => void; embedded?: boolean }) {
   const [info, setInfo] = useState<TrashInfo | null>(null);
   const [rows, setRows] = useState<TrashEntry[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -79,7 +79,7 @@ export function TrashView(props: { settings: Settings; onOpenSettings: () => voi
     finally { setBusy(null); }
   }
 
-  const head = <PageHeader title="Trash" subtitle="Recover folders removed by Dev Cleaner until they are permanently deleted." />;
+  const head = props.embedded ? null : <PageHeader title="Trash" subtitle="Recover folders removed by Dev Cleaner until they are permanently deleted." />;
   if (!rows || !info) return <div>{head}<div className="card overflow-hidden"><SkeletonRows rows={4} /></div></div>;
 
   if (!info.supported) {

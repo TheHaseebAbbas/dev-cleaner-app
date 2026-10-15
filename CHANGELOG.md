@@ -20,6 +20,13 @@ Each release's notes on GitHub include its section from this file. Add a `## <ve
 - The result line shows partial moves ("Moved 3 of 4 items to Trash") and has **Undo**, which restores exactly what was moved and never overwrites a folder that is back.
 - The details panel on Clean is short; the full reasons and numbers sit under **Technical details**.
 
+### Advanced tools and simpler settings
+- The sidebar shows **Clean**, **Activity** and **Settings**. **More** opens Projects, Tools & SDKs, the storage map, the dependency map and cleanup rules.
+- **Show advanced tools** (Settings → Appearance) keeps Projects and Tools & SDKs in the sidebar, shows every setting and the full details panel. It changes only what is shown, never what can be removed.
+- Settings is one page: **Folders**, **Cleaning** and **Appearance**. Every 1.x setting keeps its value after the upgrade.
+- Trash and History are one **Activity** page: each cleanup, with **Restore** for what is still in the Trash. Restore never replaces a folder that is back. Delete forever, Keep longer and the full history are under **Manage Trash** and **Report** with advanced tools on.
+- The sidebar shows when you last cleaned.
+
 ## 1.0.0
 
 The first release of Dev Cleaner as a desktop app for Windows, macOS and Linux.
