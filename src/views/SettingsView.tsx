@@ -159,8 +159,8 @@ function ScheduleSection({ s, set }: { s: Settings; set: <K extends keyof Settin
           <Field label="How often" hint="Counted from the last run.">
             <Segmented value={String(sc.every_days)} onChange={(v) => put({ every_days: Number(v) })} options={[{ value: "1", label: "Daily" }, { value: "7", label: "Weekly" }, { value: "14", label: "Every 2 weeks" }, { value: "30", label: "Monthly" }]} />
           </Field>
-          <Field label="What to look for" hint="Safe: build output and caches that rebuild without downloads. Recommended: everything marked Recommended.">
-            <Segmented value={sc.profile} onChange={(v) => put({ profile: v })} options={[{ value: "safe", label: "Safe" }, { value: "recommended", label: "Recommended" }]} />
+          <Field label="What to look for" hint="No downloads: Safe to clean items that come back without downloading. Safe to clean: everything in that group.">
+            <Segmented value={sc.profile} onChange={(v) => put({ profile: v })} options={[{ value: "safe", label: "No downloads" }, { value: "recommended", label: "Safe to clean" }]} />
           </Field>
           <Field label="Then" hint="Moving to Trash never deletes permanently and skips anything with a warning, in use, protected or needing confirmation.">
             <Segmented value={sc.action} onChange={(v) => put({ action: v })} options={[{ value: "remind", label: "Just tell me" }, { value: "clean", label: "Move to Trash" }]} />
@@ -329,11 +329,11 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
               <Toggle checked={s.confirm_before_delete} onChange={(v) => set("confirm_before_delete", v)} label="Ask before removing" description="Show a summary first. Risky items, permanent deletion and programs in use always ask." />
             </Group>
             <Sub title="Recommendations" hint="How Dev Cleaner suggests what to remove. Takes effect on the next scan.">
-              <Toggle checked={s.recommendations_enabled} onChange={(v) => set("recommendations_enabled", v)} label="Show recommendations" description="Mark each folder Recommended, Review or Keep, with the reasons, and offer Quick select." />
-              <Field label="Quick select default" hint="Safe picks build output and caches that rebuild without downloads. Deep also picks Review items, never Keep.">
-                <Segmented value={s.default_cleanup_profile} onChange={(v) => set("default_cleanup_profile", v)} options={[{ value: "safe", label: "Safe" }, { value: "recommended", label: "Recommended" }, { value: "deep", label: "Deep" }]} />
+              <Toggle checked={s.recommendations_enabled} onChange={(v) => set("recommendations_enabled", v)} label="Show recommendations" description="Sort results into Safe to clean, Worth a look and Leaving alone, explain each one, and tick the safe ones after a scan." />
+              <Field label="Quick select default" hint="No downloads picks Safe to clean items that come back without downloading. Safe + worth a look also picks Worth a look items, never Leaving alone.">
+                <Segmented value={s.default_cleanup_profile} onChange={(v) => set("default_cleanup_profile", v)} options={[{ value: "safe", label: "No downloads" }, { value: "recommended", label: "Safe to clean" }, { value: "deep", label: "Safe + worth a look" }]} />
               </Field>
-              <Field label="Minimum confidence" hint="Only detections at least this certain are marked Recommended.">
+              <Field label="Minimum confidence" hint="Only detections at least this certain can be Safe to clean.">
                 <Segmented value={s.minimum_recommendation_confidence} onChange={(v) => set("minimum_recommendation_confidence", v)} options={CONFIDENCE_OPTIONS.map((c) => ({ value: c, label: CONFIDENCE_LABEL[c] }))} />
               </Field>
               <Field label="Project activity" hint="Fast looks at a project's top-level files. Accurate finds the newest file anywhere in it, which takes longer.">

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { api, ageDays, fmtAge, fmtBytes, fmtDuration, failedReport, kindLine, profileMatches, reclaimOf, type CleanupProfile, type DeleteReport, type GitStatus, type Item, type Part, type Preview, type Rule, type Settings, type Verdict } from "../api";
+import { api, ageDays, fmtAge, fmtBytes, fmtDuration, failedReport, kindLine, reclaimOf, type CleanupProfile, type DeleteReport, type GitStatus, type Item, type Part, type Preview, type Rule, type Settings } from "../api";
+import { GROUP_LABEL, groupOf, groupRank, groupTotals, preselectIds, profileMatches, reasonLine, type CleanGroup } from "../ui/clean";
 import { Details } from "../components/Details";
 import { CleanupNotice, ConfirmDialog, HelpDialog, LocationsDialog, ResultDialog, type PlanEntry } from "../components/dialogs";
 import { ScanPanel } from "../components/ScanPanel";
@@ -18,9 +19,9 @@ type SortKey = "size" | "name" | "project" | "active";
 type View = "project" | "flat" | "map";
 
 const PROFILES: { value: CleanupProfile; label: string; hint: string }[] = [
-  { value: "safe", label: "Safe", hint: "Recommended build output and caches that rebuild without downloads" },
-  { value: "recommended", label: "Recommended", hint: "Everything marked Recommended" },
-  { value: "deep", label: "Deep", hint: "Recommended and Review items. Never Keep or protected ones" },
+  { value: "safe", label: "No downloads", hint: "Safe to clean items that come back without downloading anything" },
+  { value: "recommended", label: "Safe to clean", hint: "Everything Safe to clean" },
+  { value: "deep", label: "Safe + worth a look", hint: "Also picks Worth a look items. Never Leaving alone" },
 ];
 
 const MOD = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl";
@@ -37,8 +38,9 @@ function toModel(i: Item, flat: boolean, verdicts: boolean): RowModel {
     state: i.block ? "blocked" : partsOnly ? "parts" : "selectable",
     reason: i.block?.reason ?? (partsOnly ? "Some parts must be kept, so choose parts one at a time." : undefined),
     checks: checksFor({ ...i }),
-    badges: verdicts && !i.block ? <VerdictBadge rec={i.recommendation} block={i.block} /> : undefined,
-    owner: { category: i.category, warnings: i.warnings, block: i.block },
+    note: verdicts ? reasonLine(i) : undefined,
+    badges: verdicts ? <VerdictBadge item={i} /> : undefined,
+    owner: { category: i.category, warnings: i.warnings, block: i.block, risk: i.risk },
     flat: flat ? { type: i.ecosystem, project: i.project_name } : undefined,
   };
 }
@@ -53,6 +55,7 @@ export function Projects(props: {
   const { scan, settings } = props;
   const { items, status } = scan;
   const est = settings.show_reclaim_estimate;
+  const verdicts = settings.recommendations_enabled;
   const [rules, setRules] = useState<Rule[]>([]);
   const [query, setQuery] = useState("");
   const [eco, setEco] = useState("all");
@@ -60,7 +63,7 @@ export function Projects(props: {
   const [minMb, setMinMb] = useState(settings.min_size_mb);
   const [minAge, setMinAge] = useState(settings.min_age_days);
   const [git, setGit] = useState<"all" | GitStatus>("all");
-  const [verdict, setVerdict] = useState<"all" | Verdict>("all");
+  const [verdict, setVerdict] = useState<"all" | CleanGroup>("all");
   const [hideWarn, setHideWarn] = useState(false);
   const [hideProtected, setHideProtected] = useState(false);
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: "size", desc: true });
@@ -90,15 +93,17 @@ export function Projects(props: {
       (eco === "all" || i.ecosystem === eco) && (ruleName === "all" || i.rule_name === ruleName) &&
       i.disk_bytes >= minMb * 1024 * 1024 && ageDays(i.project_last_modified) >= minAge &&
       (git === "all" || i.git === git || (git === "tracked" && i.git === "modified")) &&
-      (verdict === "all" || (i.block ? "blocked" : i.recommendation.verdict) === verdict) &&
+      (verdict === "all" || groupOf(i) === verdict) &&
       (!hideWarn || !i.warnings.length) && (!hideProtected || !i.block) &&
       (!q || `${i.path} ${i.rule_name} ${i.rule_id} ${i.ecosystem} ${i.project_name}`.toLowerCase().includes(q)));
     const dir = sort.desc ? -1 : 1;
     return list.sort((a, b) => {
+      // Sorting by size keeps Safe to clean first and Leaving alone last.
+      if (verdicts && sort.key === "size" && groupRank(a) !== groupRank(b)) return groupRank(a) - groupRank(b);
       const cmp = sort.key === "size" ? a.disk_bytes - b.disk_bytes : sort.key === "name" ? a.rule_name.localeCompare(b.rule_name) : sort.key === "project" ? a.project_name.localeCompare(b.project_name) : a.project_last_modified - b.project_last_modified;
       return cmp * dir;
     });
-  }, [items, query, eco, ruleName, minMb, minAge, git, verdict, hideWarn, hideProtected, sort]);
+  }, [items, query, eco, ruleName, minMb, minAge, git, verdict, hideWarn, hideProtected, sort, verdicts]);
 
   const groups = useMemo(() => {
     const m = new Map<string, Item[]>();
@@ -119,7 +124,7 @@ export function Projects(props: {
   const planBytes = plan.reduce((s, e) => s + e.bytes, 0);
   const free = items.filter((i) => !i.block);
   const totalAll = free.reduce((s, i) => s + reclaimOf(i, est), 0);
-  const verdicts = settings.recommendations_enabled;
+  const totals = groupTotals(items, (i) => reclaimOf(i, est));
   const projectCount = new Set(free.map((i) => i.project_path)).size;
   const focusItem = items.find((i) => i.id === focus) ?? null;
   const maxBytes = filtered.reduce((m, i) => Math.max(m, i.disk_bytes), 0);
@@ -159,6 +164,15 @@ export function Projects(props: {
   const cleanBlocked = isScanning ? "Wait for the scan to finish"
     : partial ? "The scan did not finish. Run a full scan to clean."
     : stale ? `This scan is ${scanAgeMin} minutes old. Rescan to clean.` : undefined;
+
+  // After a complete scan, tick every Safe to clean folder once. A new scan has new ids, so an
+  // old selection never carries over to changed folders.
+  const preselected = useRef("");
+  useEffect(() => {
+    if (status !== "done" || partial || !verdicts || !scanId || preselected.current === scanId) return;
+    preselected.current = scanId;
+    setSelected(new Set(preselectIds(items, settings.delete_mode)));
+  }, [status, partial, verdicts, scanId, items, settings.delete_mode]);
 
   async function doDelete(ack: boolean) {
     setBusy(true);
@@ -312,7 +326,9 @@ export function Projects(props: {
   return (
     <div className="flex h-full flex-col">
       {header()}
-      <MetricStrip note={note} items={[{ label: "Reclaimable", value: fmtBytes(totalAll), hero: true }, { label: "Folders", value: free.length }, { label: "Projects", value: projectCount }]} />
+      <MetricStrip note={note} items={verdicts
+        ? [{ label: "You can safely clean", hint: "estimate", value: fmtBytes(totals.safe), hero: true }, { label: "Worth a look", value: fmtBytes(totals.look) }, { label: "Projects", value: projectCount }]
+        : [{ label: "Reclaimable", value: fmtBytes(totalAll), hero: true }, { label: "Folders", value: free.length }, { label: "Projects", value: projectCount }]} />
       {panel}
       {partial && <div className="mb-3"><Banner tone="amber" icon="stop" title="Partial scan" actions={<button className="btn btn-sm" onClick={scan.start}>Scan again</button>}>These are the results found so far. Cleaning is turned off until a full scan finishes.</Banner></div>}
       {stale && <div className="mb-3"><Banner tone="amber" icon="clock" title="This scan is out of date" actions={<button className="btn btn-sm" onClick={scan.start}>Scan again</button>}>It finished {scanAgeMin} minutes ago. Scan again before cleaning.</Banner></div>}
@@ -336,8 +352,8 @@ export function Projects(props: {
                 <label className="block"><span className="muted mb-1 block text-xs">Idle for (days)</span><input className="input w-full" type="number" min={0} value={minAge} onChange={(e) => setMinAge(Number(e.target.value))} /></label>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                {verdicts && <label className="block"><span className="muted mb-1 block text-xs">Verdict</span>
-                  <select className="input w-full" value={verdict} onChange={(e) => setVerdict(e.target.value as typeof verdict)}><option value="all">Any</option><option value="recommended">Recommended</option><option value="review">Review</option><option value="keep">Keep</option><option value="blocked">Protected</option></select></label>}
+                {verdicts && <label className="block"><span className="muted mb-1 block text-xs">Status</span>
+                  <select className="input w-full" value={verdict} onChange={(e) => setVerdict(e.target.value as typeof verdict)}><option value="all">Any</option>{(["safe", "look", "leave"] as const).map((g) => <option key={g} value={g}>{GROUP_LABEL[g]}</option>)}</select></label>}
                 <label className="block"><span className="muted mb-1 block text-xs">Git</span>
                   <select className="input w-full" value={git} onChange={(e) => setGit(e.target.value as typeof git)}><option value="all">Any</option><option value="ignored">Only Git-ignored</option><option value="untracked">Not tracked</option><option value="tracked">Tracked</option><option value="not_repository">No repository</option></select></label>
               </div>

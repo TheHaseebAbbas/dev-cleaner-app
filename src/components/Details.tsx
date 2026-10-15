@@ -1,5 +1,6 @@
-import { api, CONFIDENCE_LABEL, COST_LABEL, fmtAge, fmtBytes, GIT_LABEL, kindLine, RISK_LABEL, VERDICT_LABEL, type GlobalCache, type Item, type Settings } from "../api";
+import { api, CONFIDENCE_LABEL, COST_LABEL, fmtAge, fmtBytes, GIT_LABEL, kindLine, RISK_LABEL, type GlobalCache, type Item, type Settings } from "../api";
 import { checksFor } from "../ui/checks";
+import { GROUP_LABEL, groupOf } from "../ui/clean";
 import { Icon } from "../ui/Icon";
 import { Disclosure } from "../ui/primitives";
 import { CheckList, ReasonList, WarningLines } from "../ui/warnings";
@@ -29,6 +30,7 @@ export function Details({ item, cache, settings, onClose }: { item?: Item; cache
   const desc = item ? item.description || item.rule_name : cache!.note;
   const checks = checksFor({ ...s, git: item?.git, viewOnly }, true);
   const verdicts = settings.recommendations_enabled && !viewOnly && !s.block;
+  const group = groupOf(s);
   const reclaim = settings.show_reclaim_estimate ? s.reclaimable_bytes || s.disk_bytes : s.disk_bytes;
   const ws = item?.workspace;
   return (
@@ -68,7 +70,7 @@ export function Details({ item, cache, settings, onClose }: { item?: Item; cache
 
         {verdicts && s.recommendation.reasons.length > 0 && (
           <>
-            <H>{VERDICT_LABEL[s.recommendation.verdict]}{s.recommendation.verdict === "recommended" ? ": why it is safe to remove" : s.recommendation.verdict === "keep" ? ": why you may want to keep it" : ": what to check first"}</H>
+            <H>{GROUP_LABEL[group]}{group === "safe" ? ": why it is safe to remove" : group === "leave" ? ": why it is kept" : ": what to check first"}</H>
             <ReasonList reasons={s.recommendation.reasons} />
           </>
         )}

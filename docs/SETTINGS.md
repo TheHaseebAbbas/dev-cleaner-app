@@ -37,9 +37,9 @@ Part of the Cleaning section.
 
 | Setting | Default | What it does | Best value |
 | --- | --- | --- | --- |
-| **Show recommendations** (`recommendations_enabled`) | On | Marks every item Recommended, Review or Keep with its reasons, and shows Quick select. | On. |
-| **Quick select default** (`default_cleanup_profile`) | Safe | Which profile is marked as the default in Quick select: `safe`, `recommended` or `deep`. | Safe. Use Deep only after reading the Review items. |
-| **Minimum confidence** (`minimum_recommendation_confidence`) | High | Matches less certain than this are marked Review instead of Recommended. | High. |
+| **Show recommendations** (`recommendations_enabled`) | On | Sorts every item into Safe to clean, Worth a look or Leaving alone with a one-line reason, ticks the Safe to clean items after a complete scan, and shows Quick select. Off shows the plain list and total, as before. | On. |
+| **Quick select default** (`default_cleanup_profile`) | Safe | Which profile is marked as the default in Quick select: `safe` (No downloads), `recommended` (Safe to clean) or `deep` (Safe + worth a look). | No downloads. Use Safe + worth a look only after reading those items. |
+| **Minimum confidence** (`minimum_recommendation_confidence`) | High | Matches less certain than this go to Worth a look instead of Safe to clean. | High. |
 | **Project activity** (`activity_mode`) | Fast | Fast looks at the project's top-level files. Accurate finds the newest file anywhere in the project, skipping build and dependency folders. | Fast. Accurate on monorepos where edits are deep. |
 
 #### Scheduled cleanup
@@ -49,7 +49,7 @@ Part of the Cleaning section. Stored as `schedule` in settings.json.
 | --- | --- | --- | --- |
 | **Check my projects regularly** (`schedule.enabled`) | Off | Rescans your scan folders on a schedule while the app is open. A run that is due when the app starts begins two minutes later. | On if you keep the app open and want a nudge. |
 | **How often** (`schedule.every_days`) | Weekly | Daily, weekly, every 2 weeks or monthly. | Weekly. |
-| **What to look for** (`schedule.profile`) | Safe | Which Quick select profile picks the items: `safe` or `recommended`. Deep is not offered. | Safe. |
+| **What to look for** (`schedule.profile`) | Safe | Which Quick select profile picks the items: `safe` (No downloads) or `recommended` (Safe to clean). Safe + worth a look is not offered. | Safe. |
 | **Then** (`schedule.action`) | Just tell me | `remind` shows what could be reclaimed. `clean` moves those items to the Trash. Items that would need a confirmation are always left for you. | Just tell me, until you trust the results. |
 
 ### Safety
@@ -202,7 +202,7 @@ Add your own in **Settings → Cleanup rules → Add your own rule**.
 | Description | Optional | Gatsby's build cache |
 | Risk | Safe or Caution (Danger only with *Allow dangerous custom rules*) | Safe |
 
-Custom rules are never more than Medium confidence, so their matches are offered as Review rather than Recommended. Always use a marker file when the folder name is generic (`dist`, `out`, `cache`). Without one, every folder with that name inside your scan folders matches. Custom rules are marked with a **custom** badge and can be deleted again.
+Custom rules are never more than Medium confidence, so their matches land in Worth a look rather than Safe to clean. Always use a marker file when the folder name is generic (`dist`, `out`, `cache`). Without one, every folder with that name inside your scan folders matches. Custom rules are marked with a **custom** badge and can be deleted again.
 
 Press **Test** next to a custom rule (or on the form before saving) to scan your folders with only that rule. It lists how many folders match, their total size (measured for up to 500 matches), up to 20 examples, and which matches another rule already covers or are blocked. Nothing is selected or removed. A new rule shows **Not used yet** until its first cleanup, which asks you to confirm.
 

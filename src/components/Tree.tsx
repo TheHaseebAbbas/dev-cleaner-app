@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { fmtAge, fmtBytes, type Block, type Category, type Part, type PartActivity, type Warning } from "../api";
+import { fmtAge, fmtBytes, type Block, type Category, type Part, type PartActivity, type Risk, type Warning } from "../api";
 import { partChecks } from "../ui/checks";
 import { Icon } from "../ui/Icon";
 import { Checkbox, SizeBar } from "../ui/primitives";
@@ -40,10 +40,12 @@ export interface RowModel {
   reason?: string;
   /** Safety line under the name. */
   checks: Check[];
+  /** One plain sentence on why the item is in its group; replaces the safety line when set. */
+  note?: string;
   /** Quiet extras beside the name (recommendation verdict). */
   badges?: ReactNode;
   /** For part rows: the owner's category and warnings. */
-  owner: { category: Category; warnings: Warning[]; block: Block | null };
+  owner: { category: Category; warnings: Warning[]; block: Block | null; risk: Risk };
   /** Cells for the compact Flat table (type and project). */
   flat?: { type: string; project: string };
 }
@@ -114,8 +116,12 @@ export function TreeRow(props: {
             </div>
             <div className="flex min-w-0 items-center gap-3">
               <span className="muted shrink-0 truncate text-xs">{m.state === "parts" ? <>{m.kind} · <span className="font-medium text-slate-600 dark:text-slate-300">Choose individual parts</span></> : m.kind}</span>
-              <span className="hidden min-w-0 min-[1000px]:flex"><SafetyLine checks={m.checks} /></span>
-              <span className="flex min-w-0 min-[1000px]:hidden"><SafetyLine checks={m.checks.filter((c) => c.tone !== "ok")} max={1} /></span>
+              {m.note
+                ? <span className="min-w-0 truncate text-xs text-slate-600 dark:text-slate-300" title={m.note}>{m.note}</span>
+                : <>
+                  <span className="hidden min-w-0 min-[1000px]:flex"><SafetyLine checks={m.checks} /></span>
+                  <span className="flex min-w-0 min-[1000px]:hidden"><SafetyLine checks={m.checks.filter((c) => c.tone !== "ok")} max={1} /></span>
+                </>}
             </div>
           </div>
         </div>
@@ -155,7 +161,7 @@ export function TreeRow(props: {
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="truncate font-mono text-[13px]" title={p.path}>{p.name}</span>
-                      {m.state !== "view" && <VerdictBadge rec={p.recommendation} block={p.block} />}
+                      {m.state !== "view" && p.recommendation && <VerdictBadge item={{ block: p.block, recommendation: p.recommendation, warnings: [...m.owner.warnings, ...(p.warning ? [p.warning] : [])], risk: p.risk ?? m.owner.risk, in_use: p.in_use, parts: [] }} />}
                     </div>
                     <div className="flex min-w-0 items-center gap-3">
                       <span className="faint shrink-0 text-xs">{p.is_file ? "file" : `${p.file_count.toLocaleString()} files`} · {p.activity && p.activity !== "active" ? ACTIVITY_TEXT[p.activity] : `changed ${fmtAge(p.last_modified)}`}</span>

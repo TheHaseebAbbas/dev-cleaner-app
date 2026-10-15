@@ -27,7 +27,7 @@ The sidebar groups the app into **Clean** (Projects, Tools & SDKs), **Manage** (
 | Esc | Close the panel, then clear the selection |
 | Delete | Reclaim the selection (asks first) |
 
-On first launch a single welcome screen asks for your project folders. Once something is selected, a bar at the bottom shows the size and the button **Reclaim X**. Every folder gets a verdict (**Recommended**, **Review** or **Keep**), and folders are labelled **Check first** or **May be required** when they need care.
+On first launch a single welcome screen asks for your project folders. Once something is selected, a bar at the bottom shows the size and the button **Reclaim X**. Every folder lands in one group: **Safe to clean**, **Worth a look** or **Leaving alone**, with one line under its name saying why. After a complete scan, every Safe to clean folder is ticked for you (only in Trash mode; nothing is ticked for permanent deletion).
 
 ## How the app decides what to show
 Dev Cleaner works from **rules**. A rule says "a folder with this name counts only if this marker file is next to it". For example `node_modules` counts only beside a `package.json`, and Rust's `target` only beside a `Cargo.toml`. A plain folder that happens to be called `build` or `target` is left alone.
@@ -55,9 +55,9 @@ You can see both lists at any time with the eye button or **Where it looks**. Th
 Switching to another page does not cancel a scan. Come back and the results are still there.
 
 ### Reading the list
-Each row shows the folder, its type, **size on disk**, file count, and badges: the verdict (**Recommended**, **Review**, **Keep**), a lock when it cannot be selected (**Protected**, **Tracked by Git**, **System folder**, **Contains keys**), **Danger** or **Critical** risk, and warnings. Hover a verdict to see its score and reasons.
+Each row shows the folder, its type, **size on disk**, file count, its group (**Safe to clean**, **Worth a look**, **Leaving alone**) and one plain sentence on why. A lock means it cannot be selected (**Protected**, **Tracked by Git**, **System folder**, **Contains signing keys**, **Not removable**). Hover the group to see the reasons; the details panel lists every check, and its Advanced details show risk, confidence and score.
 
-The numbers at the top are the reclaimable total (blocked items excluded), how much is Recommended, how many items need review, and how many are protected.
+The big number at the top is what you can safely clean: an estimate that counts only Safe to clean items. Worth a look items are shown next to it and never added in. On Tools & SDKs, Docker and WSL are listed once under the list as "shown, not cleaned" and are left out of every total.
 
 - **Size on disk** is what you actually get back. Apparent size (the sum of file sizes) is in the details panel.
 - **Project used** is the newest change anywhere in the project, not only in the folder. A project you touched yesterday is probably live.
@@ -70,14 +70,14 @@ The numbers at the top are the reclaimable total (blocked items excluded), how m
 ### Views and filters
 - **By project** groups rows under their project. **Flat** is one sorted list. **Map** is a treemap where area is size.
 - Search by path or type, filter by type, verdict, Git status, minimum size (MB) and minimum idle days, and hide folders with warnings or protected folders.
-- **Quick select** ticks every visible item that fits a profile: **Safe** (Recommended items that rebuild without downloads), **Recommended**, or **Deep** (Recommended and Review). It never ticks Keep or protected items.
+- **Quick select** ticks every visible item that fits a profile: **No downloads** (Safe to clean items that come back without downloading), **Safe to clean**, or **Safe + worth a look**. It never ticks Leaving alone items.
 - Click a column header to sort.
 - **Expand all / Collapse all** (next to the view switcher) opens or closes every project group and every folder's parts in one click. The button flips to show what the next click does. You can also open a single group or the arrow on a row. The same button is in the Tools & SDKs page.
 
 ## The Tools & SDKs page
 Same states as Projects. Results are grouped by ecosystem (Android, Node.js, Rust and so on), with *View only* locations last, sorted by size. Only caches that exist on your computer are shown. Click a row for the same details panel as Projects.
 
-Scan your projects first. SDK platforms, build tools, NDKs, Rust toolchains, FVM Flutter versions and Gradle distributions are then marked **Used by N projects**, **Not used by scanned projects** or **Usage unknown**, and versions in use are marked Keep.
+Scan your projects first. SDK platforms, build tools, NDKs, Rust toolchains, FVM Flutter versions and Gradle distributions are then marked **Used by N projects**, **Not used by scanned projects** or **Usage unknown**, and versions in use land in Leaving alone.
 
 Switch **View** to **Dependency map** to see each installed version (Android platforms, build-tools and NDKs, Rust toolchains, FVM Flutter versions, Gradle distributions) with the projects that use it. Versions a project asks for but that are not installed are listed too. **Select N unused** ticks the versions no scanned project uses. It is not offered when a project does not pin a version, since that project could use any of them.
 

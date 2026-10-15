@@ -4,13 +4,13 @@
 
 A desktop app that finds and removes the junk developer tools leave behind: `node_modules`, build output, package caches, SDK downloads, simulators and IDE caches. It runs on Windows, macOS and Linux.
 
-**Safe by default.** Nothing is deleted until you tick it and confirm. Every item is marked Recommended, Review or Keep with the reasons, folders Git tracks, system folders and folders holding keys cannot be selected, and each item is checked again right before it is removed. Removed folders go to the Trash and a dry-run mode lets you rehearse. See [Safety](docs/SAFETY.md).
+**Safe by default.** Nothing is deleted until you tick it and confirm. Every item is sorted into Safe to clean, Worth a look or Leaving alone with a plain reason, folders Git tracks, system folders and folders holding keys cannot be selected, and each item is checked again right before it is removed. Removed folders go to the Trash and a dry-run mode lets you rehearse. See [Safety](docs/SAFETY.md).
 
 ## What you get
 
 | Page | What it does |
 | --- | --- |
-| **Projects** | Scans your code folders and lists every rebuildable folder with size, a verdict and its reasons, risk, Git status and warnings. Quick select picks the safe ones for you. Folders made of independent pieces expand into sub-items you can remove one by one. |
+| **Projects** | Scans your code folders and lists every rebuildable folder with size, its group (Safe to clean, Worth a look, Leaving alone) and one line saying why. The safe ones are ticked for you after a scan. Folders made of independent pieces expand into sub-items you can remove one by one. |
 | **Tools & SDKs** | Measures caches and SDKs in your user folder (npm, Cargo, Gradle, Android SDK, Xcode, JetBrains, VS Code caches and more), grouped by ecosystem. A **Dependency map** view shows which installed SDK and toolchain versions your projects use, and which they need but are missing. Docker and WSL disks are shown view-only. |
 | **Trash** | Everything Dev Cleaner moved to the Trash, with **Restore** and **Delete forever**, an auto-clear timer, and a per-item **Keep longer** option. |
 | **History** | Every cleanup, with the total space reclaimed and an **Over time** chart of what was reclaimed per month. |
@@ -44,7 +44,7 @@ The builds are not code-signed yet, so your system warns the first time you open
 1. [Download](#download) and open the app, or run it from source (see the setup guide for your system below).
 2. On first launch, choose the folder that holds your projects, for example `C:\development` or `~/code`. You can change it later in **Settings → Scanning**.
 3. Go to **Projects** and press **Scan projects**.
-4. Tick what you want gone, or use **Quick select → Safe**. Use the arrow on a row to pick only some parts.
+4. Tick what you want gone, or keep the Safe to clean folders that are already ticked. Use the arrow on a row to pick only some parts.
 5. Press **Reclaim** in the bar that appears, then confirm.
 
 Press **Ctrl/Cmd+K** for the command palette. Shortcuts: Ctrl/Cmd+R scan, Ctrl/Cmd+A select visible, Ctrl/Cmd+, settings, Esc clear, Delete reclaim.
