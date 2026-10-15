@@ -2,7 +2,9 @@
 
 Each release's notes on GitHub include its section from this file. Add a `## <version>` section before tagging a release.
 
-## Unreleased
+## 2.0.0
+
+Dev Cleaner now opens on one **Clean** page that answers "what can I safely remove?", and everything else moves one click behind it. Nothing about what can be deleted or how it is checked has changed.
 
 ### Clearer results
 - Every item now lands in one of three groups: **Safe to clean**, **Worth a look** or **Leaving alone**, with one plain sentence on why, in place of the row of badges. Verdict, risk, confidence and score are still in the details panel.
@@ -26,6 +28,11 @@ Each release's notes on GitHub include its section from this file. Add a `## <ve
 - Settings is one page: **Folders**, **Cleaning** and **Appearance**. Every 1.x setting keeps its value after the upgrade.
 - Trash and History are one **Activity** page: each cleanup, with **Restore** for what is still in the Trash. Restore never replaces a folder that is back. Delete forever, Keep longer and the full history are under **Manage Trash** and **Report** with advanced tools on.
 - The sidebar shows when you last cleaned.
+
+### Old projects and a gentle reminder
+- After a complete scan, Clean says how many projects have not been touched for 3 months and how much you could clean in them. **Show them** narrows the list; nothing is ticked for you.
+- **Tell me when there's more than 5 GB to clean** turns on a weekly check (off by default). It speaks only after a complete scan, only above the amount, and only when something is new. With advanced tools on, the amount can be 1, 5, 10 or 20 GB.
+- Docs and screenshots describe the new pages.
 
 ## 1.0.0
 

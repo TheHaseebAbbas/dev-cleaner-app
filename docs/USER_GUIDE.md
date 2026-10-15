@@ -31,6 +31,8 @@ The sidebar shows **Clean**, **Activity** and **Settings**, and **More**, which 
 On first launch a single welcome screen asks for your project folders. Once something is selected, a bar at the bottom shows the size and the button **Move X to Trash** (or **Delete X permanently** in that mode). Every folder lands in one group: **Safe to clean**, **Worth a look** or **Leaving alone**, with one line under its name saying why. After a complete scan, every Safe to clean folder is ticked for you (only in Trash mode; nothing is ticked for permanent deletion).
 
 ## The Clean page
+![The Clean page](images/clean-light.png)
+
 The app opens on **Clean**. Press **Scan** and it checks your project folders and your tools' caches at the same time.
 
 - **Scan status.** One line per source, Projects and Tools & SDKs, says Scanning, Done, Partial (stopped, a scan folder is missing, or something could not be measured) or Failed with the reason, with **Try again**. A source that did not finish is never shown as an empty, clean result.
@@ -40,7 +42,10 @@ The app opens on **Clean**. Press **Scan** and it checks your project folders an
 - **Cleaning.** One button covers projects and tools together, and one dialog confirms it. In Trash mode it says the items move to the Trash and that the space comes back when the Trash is emptied.
 - **Undo.** The result line after a move to Trash has an **Undo** button that restores exactly what was just moved. It never overwrites a folder that has been recreated since.
 
-The **Projects** and **Tools & SDKs** pages are still there for filters, the storage map, the dependency map and picking parts.
+- **Old projects.** After a complete scan, if some projects have not been touched for 3 months or more, one line says how many and how much you could clean in them. **Show them** narrows the list to those projects; **Show everything** goes back. It is a suggestion only: nothing is ticked or unticked.
+- **Reminder.** Under the list, **Tell me when there's more than 5 GB to clean** turns on a weekly check while the app is open. It speaks only after a complete scan, only above the amount, and only when it finds something it has not mentioned before. It never removes anything.
+
+The **Projects** and **Tools & SDKs** pages are still there for filters, the storage map, the dependency map and picking parts. Open them from **More**, or turn on **Show advanced tools**.
 
 ## How the app decides what to show
 Dev Cleaner works from **rules**. A rule says "a folder with this name counts only if this marker file is next to it". For example `node_modules` counts only beside a `package.json`, and Rust's `target` only beside a `Cargo.toml`. A plain folder that happens to be called `build` or `target` is left alone.
@@ -138,6 +143,8 @@ In **Move to Trash** mode (the default) folders go to your operating system's Tr
 In **Delete permanently** mode nothing goes to the Trash and it cannot be undone.
 
 ### Activity (Windows and Linux)
+![Activity: each cleanup with Restore](images/activity-light.png)
+
 **Activity** lists every cleanup, newest first: how many items, how much, and how many are still in the Trash. **Restore** on a cleanup puts back everything from it that is still in the Trash; open **Show items** to restore one at a time. Restore never replaces a folder that exists again at the original path; that item is reported and left in the Trash.
 
 With advanced tools on, **Manage Trash** lists the folders themselves: size, when they were removed, where they will be restored to, and when they will be cleared automatically.
@@ -157,7 +164,9 @@ macOS does not let apps list or restore the Trash, so Activity lists your cleanu
 Activity shows every cleanup. With advanced tools on, **Report** lists every removal with time, path, project, kind, how it was removed and the estimated space freed. The top shows the total reclaimed. Open **Over time** for the space reclaimed per month over the last year, the kinds of folders that freed the most, and how the reclaimable total changed between scans.
 
 ## Scheduled cleanup
-Off by default. Turn it on in **Settings → Cleaning → Scheduled cleanup**. While the app is open it rescans your project folders every day, week, two weeks or month. It then tells you what could be reclaimed, or, if you chose *Move to Trash*, moves the items that need no confirmation to the Trash. It never deletes permanently.
+Off by default. The simple form is the reminder on the Clean page and in **Settings → Cleaning**: **Tell me when there's more than 5 GB to clean**. While the app is open it rescans your project folders once a week. It tells you only after a complete scan, only when the Safe to clean total is above the amount, and only when something is new since the last reminder. A folder you cleaned that grows back counts as new.
+
+With advanced tools on, **Settings → Cleaning → Scheduled cleanup** also sets how often (every day, week, two weeks or month), the amount (1, 5, 10 or 20 GB), and whether to just tell you or move the items that need no confirmation to the Trash. It never deletes permanently.
 
 ## Where your data is stored
 Settings and history are plain files, safe to back up or delete:

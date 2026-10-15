@@ -93,3 +93,40 @@ fn restore_never_overwrites_a_folder_that_is_back() {
     let gone = dir.path().join("target");
     assert!(crate::trash_bin::restore_check(&gone).is_ok(), "a free spot can be restored to");
 }
+
+#[test]
+fn the_reminder_fires_only_after_a_complete_scan_and_once_per_finding() {
+    use crate::schedule::{reminder, Schedule, DEFAULT_MIN_BYTES};
+    use std::collections::BTreeSet;
+    const GB: u64 = 1024 * 1024 * 1024;
+    let none = BTreeSet::new();
+    let big = vec![("/a/node_modules".to_string(), 4 * GB), ("/b/target".to_string(), 2 * GB)];
+    assert_eq!(Schedule::default().min_bytes, DEFAULT_MIN_BYTES);
+    assert!(!Schedule::default().enabled, "still off by default");
+
+    // A partial scan never reminds and forgets nothing.
+    let (tell, keep) = reminder(false, &big, 5 * GB, &none);
+    assert!(!tell && keep.is_empty());
+    // Under the threshold: quiet.
+    assert!(!reminder(true, &big[..1], 5 * GB, &none).0);
+    // Over it: tell once, then stay quiet for the same finding.
+    let (tell, seen) = reminder(true, &big, 5 * GB, &none);
+    assert!(tell);
+    assert!(!reminder(true, &big, 5 * GB, &seen).0, "the same finding is not repeated");
+    // Something new on top: tell again.
+    let mut more = big.clone();
+    more.push(("/c/.gradle".to_string(), GB));
+    assert!(reminder(true, &more, 5 * GB, &seen).0);
+    // A folder that was cleaned is forgotten, so when it grows back it counts as new.
+    let (_, after) = reminder(true, &big[1..], 5 * GB, &seen);
+    assert_eq!(after.len(), 1);
+    assert!(reminder(true, &big, 5 * GB, &after).0);
+}
+
+#[test]
+fn a_1x_schedule_gets_the_default_threshold() {
+    let s: crate::schedule::Schedule = serde_json::from_str(r#"{"enabled":true,"every_days":14,"profile":"safe","action":"remind"}"#).unwrap();
+    assert!(s.enabled);
+    assert_eq!(s.every_days, 14);
+    assert_eq!(s.min_bytes, crate::schedule::DEFAULT_MIN_BYTES);
+}

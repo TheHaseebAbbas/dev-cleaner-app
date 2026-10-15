@@ -97,13 +97,16 @@ export default function App() {
       listen("trash-changed", () => { refreshDisk(); setToast({ tone: "info", text: "Trash auto-clear removed folders whose time was up." }); }),
       listen<RunSummary>("schedule-done", (e) => {
         const r = e.payload;
-        if (r.error) setToast({ tone: "error", text: `Scheduled check could not finish. ${r.error}` });
-        else if (r.action === "clean" && r.removed) { refreshDisk(); setToast({ tone: "info", text: `Scheduled cleanup ${r.dry_run ? "would move" : "moved"} ${r.removed} folder${r.removed === 1 ? "" : "s"} to Trash (${fmtBytes(r.removed_bytes)}).` }); }
-        else if (r.matched) setToast({ tone: "info", text: <>Scheduled check: {r.matched} folder{r.matched === 1 ? "" : "s"} ({fmtBytes(r.matched_bytes)}) can be cleaned. <button className="font-medium text-indigo-600 underline dark:text-indigo-300" onClick={() => setTab("clean")}>Review</button></> });
+        if (r.action === "clean") {
+          if (r.error) setToast({ tone: "error", text: `Scheduled cleanup could not finish. ${r.error}` });
+          else if (r.removed) { refreshDisk(); refreshLast(); setToast({ tone: "info", text: `Scheduled cleanup ${r.dry_run ? "would move" : "moved"} ${r.removed} folder${r.removed === 1 ? "" : "s"} to Trash (${fmtBytes(r.removed_bytes)}).` }); }
+        }
+        // The reminder speaks only after a complete scan, over the threshold, with something new.
+        else if (r.notify) setToast({ tone: "info", text: <>You can safely clean about {fmtBytes(r.matched_bytes)} in your projects. <button className="font-medium text-indigo-600 underline dark:text-indigo-300" onClick={() => setTab("clean")}>Review</button></> });
       }),
     ];
     return () => { subs.forEach((u) => u.then((f) => f()).catch(() => {})); };
-  }, [refreshDisk]);
+  }, [refreshDisk, refreshLast]);
 
   useEffect(() => {
     if (!settings) return;
@@ -255,7 +258,7 @@ export default function App() {
         </div>
       </nav>
       <main className="min-w-0 flex-1 overflow-hidden px-6 py-5">
-        {tab === "clean" && <CleanView scan={scan} globalScan={globalScan} settings={settings} onOpenSettings={openSettings} onDeleted={onDeleted} />}
+        {tab === "clean" && <CleanView scan={scan} globalScan={globalScan} settings={settings} onOpenSettings={openSettings} onChangeSettings={updateSettings} onDeleted={onDeleted} />}
         {tab === "projects" && <Projects scan={scan} settings={settings} onChangeSettings={updateSettings} onOpenSettings={openSettings} onDeleted={onDeleted} />}
         {tab === "global" && <GlobalView scan={globalScan} settings={settings} onOpenSettings={openSettings} onDeleted={onDeleted} />}
         {tab === "activity" && <ActivityView settings={settings} onOpenSettings={() => { setSection(advanced ? "trash" : null); setTab("settings"); }} onChanged={() => { refreshDisk(); refreshLast(); }} />}
