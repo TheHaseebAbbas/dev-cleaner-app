@@ -147,6 +147,8 @@ export interface Schedule {
   every_days: number;
   profile: "safe" | "recommended";
   action: "remind" | "clean";
+  /** Remind only once at least this much can be cleaned. */
+  min_bytes: number;
 }
 
 export interface Settings {
@@ -441,6 +443,8 @@ export interface RunSummary {
   skipped: number;
   dry_run: boolean;
   error: string | null;
+  /** Remind: tell the user (complete scan, over the threshold, something new). */
+  notify: boolean;
 }
 
 export interface ScheduleStatus {

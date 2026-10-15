@@ -9,6 +9,7 @@
 use crate::model::{Risk, Verdict};
 use crate::scanner::Item;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 use std::path::Path;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -30,11 +31,16 @@ pub struct Schedule {
     /// "safe" or "recommended". "deep" is not allowed for unattended runs.
     pub profile: String,
     pub action: ScheduleAction,
+    /// Remind only once at least this much can be cleaned.
+    pub min_bytes: u64,
 }
+
+/// The reminder's default threshold: 5 GB.
+pub const DEFAULT_MIN_BYTES: u64 = 5 * 1024 * 1024 * 1024;
 
 impl Default for Schedule {
     fn default() -> Self {
-        Schedule { enabled: false, every_days: 7, profile: "safe".into(), action: ScheduleAction::Remind }
+        Schedule { enabled: false, every_days: 7, profile: "safe".into(), action: ScheduleAction::Remind, min_bytes: DEFAULT_MIN_BYTES }
     }
 }
 
@@ -44,6 +50,8 @@ impl Default for Schedule {
 pub struct ScheduleState {
     pub last_run: u64,
     pub last_result: Option<RunSummary>,
+    /// Paths the last reminder already told the user about.
+    pub reminded: BTreeSet<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -61,6 +69,8 @@ pub struct RunSummary {
     pub dry_run: bool,
     /// Set when the run could not complete (scan stopped, nothing to scan...).
     pub error: Option<String>,
+    /// Remind: the user should be told (complete scan, over the threshold, something new).
+    pub notify: bool,
 }
 
 impl ScheduleState {
@@ -82,6 +92,26 @@ pub fn next_run(s: &Schedule, last_run: u64) -> Option<u64> {
 
 pub fn is_due(s: &Schedule, last_run: u64, now: u64) -> bool {
     next_run(s, last_run).is_some_and(|t| now >= t)
+}
+
+/// Whether a reminder run should tell the user, and what to remember for next time.
+///
+/// It tells only after a complete scan, only when the eligible items add up to at least
+/// `min_bytes`, and only when at least one of them was not in an earlier reminder, so the same
+/// finding is never repeated. Paths that are gone are forgotten, so a folder that grows back
+/// counts as new. A partial scan changes nothing.
+pub fn reminder(complete: bool, eligible: &[(String, u64)], min_bytes: u64, reminded: &BTreeSet<String>) -> (bool, BTreeSet<String>) {
+    if !complete {
+        return (false, reminded.clone());
+    }
+    let now: BTreeSet<String> = eligible.iter().map(|(p, _)| p.clone()).collect();
+    let total: u64 = eligible.iter().map(|(_, b)| b).sum();
+    let fresh = now.iter().any(|p| !reminded.contains(p));
+    if total >= min_bytes.max(1) && fresh {
+        (true, now)
+    } else {
+        (false, reminded.intersection(&now).cloned().collect())
+    }
 }
 
 /// Items an unattended run may clean: whole items only, Recommended, no warnings, nothing

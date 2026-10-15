@@ -104,3 +104,30 @@ export function profileMatches(c: Candidate, profile: CleanupProfile): boolean {
   if (profile === "recommended") return g === "safe";
   return g === "safe" || g === "look";
 }
+
+/** Projects untouched for this many days count as old. */
+export const OLD_PROJECT_DAYS = 90;
+
+export interface OldProjects {
+  /** Project paths, largest first. */
+  paths: string[];
+  /** What can be cleaned in them (Safe to clean and Worth a look only). */
+  bytes: number;
+}
+
+/**
+ * Projects nobody has touched in a while, and how much could be cleaned in them. A suggestion
+ * only: it never selects anything, and Leaving alone items never count.
+ */
+export function oldProjects<T extends Candidate & { project_path: string; project_last_modified: number }>(
+  items: T[], size: (c: T) => number, now = Date.now() / 1000, days = OLD_PROJECT_DAYS,
+): OldProjects {
+  const cutoff = now - days * 86_400;
+  const per = new Map<string, number>();
+  for (const i of items) {
+    if (!i.project_last_modified || i.project_last_modified > cutoff || groupOf(i) === "leave") continue;
+    per.set(i.project_path, (per.get(i.project_path) ?? 0) + size(i));
+  }
+  const paths = [...per.entries()].sort((a, b) => b[1] - a[1]).map(([p]) => p);
+  return { paths, bytes: [...per.values()].reduce((s, b) => s + b, 0) };
+}

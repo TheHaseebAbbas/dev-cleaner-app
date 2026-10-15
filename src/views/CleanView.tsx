@@ -2,11 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { api, failedReport, fmtBytes, fmtDuration, kindLine, reclaimOf, type DeleteReport, type GlobalCache, type Item, type Part, type Preview, type ScanSummary, type Settings } from "../api";
 import { Details } from "../components/Details";
 import { CleanupNotice, ConfirmDialog, ResultDialog, type PlanEntry } from "../components/dialogs";
+import { ReminderToggle } from "../components/Reminder";
 import { SelectionBar } from "../components/SelectionBar";
 import { GroupHeader, TreeRow, type RowModel } from "../components/Tree";
 import { useCmd } from "../hooks/commands";
 import { useElapsed, type ScanStatus, type useGlobalScan, type useScan } from "../hooks/useScans";
-import { GROUP_LABEL, groupOf, groupTotals, preselectIds, reasonLine, type CleanGroup } from "../ui/clean";
+import { GROUP_LABEL, groupOf, groupTotals, oldProjects, OLD_PROJECT_DAYS, preselectIds, reasonLine, type CleanGroup } from "../ui/clean";
 import { Icon, type IconName } from "../ui/Icon";
 import { EmptyState, MetricStrip, PageHeader, Spinner } from "../ui/primitives";
 import { toModel as cacheModel } from "./GlobalView";
@@ -57,6 +58,7 @@ export function CleanView(props: {
   globalScan: ReturnType<typeof useGlobalScan>;
   settings: Settings;
   onOpenSettings: () => void;
+  onChangeSettings: (s: Settings) => void;
   onDeleted: (r: DeleteReport) => void;
 }) {
   const { scan, globalScan: gscan, settings } = props;
@@ -73,6 +75,7 @@ export function CleanView(props: {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [result, setResult] = useState<DeleteReport | null>(null);
   const [resultOpen, setResultOpen] = useState(false);
+  const [oldOnly, setOldOnly] = useState(false);
   const scanning = scan.status === "scanning" || gscan.status === "scanning";
   const elapsed = useElapsed(Math.min(scan.startedAt || Infinity, gscan.startedAt || Infinity), scanning);
 
@@ -84,11 +87,14 @@ export function CleanView(props: {
     return out.sort((a, b) => b.bytes - a.bytes);
   }, [scan.items, gscan.caches, est]);
   const of = (r: Row) => (r.src === "p" ? r.item : r.cache);
+  const old = useMemo(() => oldProjects(scan.items, (i) => reclaimOf(i, est)), [scan.items, est]);
+  // Showing only old projects filters the list; it never changes what is ticked.
   const bySection = useMemo(() => {
+    const keep = new Set(old.paths);
     const m: Record<CleanGroup, Row[]> = { safe: [], look: [], leave: [] };
-    for (const r of rows) m[groupOf(of(r))].push(r);
+    for (const r of rows) if (!oldOnly || (r.src === "p" && keep.has(r.item.project_path))) m[groupOf(of(r))].push(r);
     return m;
-  }, [rows]);
+  }, [rows, oldOnly, old]);
   const totals = groupTotals(rows.map((r) => ({ ...of(r), size: r.bytes })), (c) => c.size);
   const maxBytes = rows.reduce((m, r) => Math.max(m, r.bytes), 0);
 
@@ -104,6 +110,8 @@ export function CleanView(props: {
   const pScanId = scan.summary?.scan_id ?? scan.items[0]?.scan_id ?? "";
   const gScanId = gscan.summary?.scan_id ?? gscan.caches[0]?.scan_id ?? "";
   const pPartial = scan.status === "stopped" || (scan.status === "done" && !!scan.summary && !scan.summary.complete);
+  // Old projects: a suggestion after a complete project scan, only when it is worth a look.
+  const showOld = scan.status === "done" && !pPartial && old.paths.length > 0 && old.bytes >= 100 * 1024 * 1024;
   const gPartial = gscan.status === "stopped" || (gscan.status === "done" && !!gscan.summary && !gscan.summary.complete);
   const preP = useRef("");
   const preG = useRef("");
@@ -134,7 +142,7 @@ export function CleanView(props: {
     : (planP.length && pPartial) || (planG.length && gPartial) ? "The scan did not finish. Run a full scan to clean."
     : settings.require_rescan_before_cleanup && staleMin >= settings.stale_scan_minutes ? `This scan is ${staleMin} minutes old. Scan again to clean.` : undefined;
 
-  const startBoth = () => { setResult(null); setFocus(null); scan.start(); gscan.start(); };
+  const startBoth = () => { setResult(null); setFocus(null); setOldOnly(false); scan.start(); gscan.start(); };
   const [undoNote, setUndoNote] = useState<string | null>(null);
   const stopBoth = () => { if (scan.status === "scanning") scan.stop(); if (gscan.status === "scanning") gscan.stop(); };
 
@@ -288,6 +296,19 @@ export function CleanView(props: {
           </li>
         ))}
       </ul>
+      {oldOnly ? (
+        <div className="mb-3 flex items-center gap-2 rounded-[10px] border border-indigo-200 bg-indigo-50/60 px-3 py-2 text-[13px] dark:border-indigo-500/30 dark:bg-indigo-500/10">
+          <Icon name="clock" className="h-4 w-4 shrink-0 text-indigo-600 dark:text-indigo-300" />
+          <span className="min-w-0 flex-1">Showing {old.paths.length} project{old.paths.length === 1 ? "" : "s"} untouched for {OLD_PROJECT_DAYS / 30} months or more.</span>
+          <button className="btn btn-ghost btn-sm" onClick={() => setOldOnly(false)}>Show everything</button>
+        </div>
+      ) : showOld && (
+        <div className="mb-3 flex items-center gap-2 rounded-[10px] border px-3 py-2 text-[13px] divider">
+          <Icon name="clock" className="h-4 w-4 shrink-0 text-slate-500" />
+          <span className="min-w-0 flex-1">{old.paths.length} project{old.paths.length === 1 ? "" : "s"} you haven't touched in {OLD_PROJECT_DAYS / 30} months {old.paths.length === 1 ? "holds" : "hold"} {fmtBytes(old.bytes)} you can clean.</span>
+          <button className="btn btn-sm" onClick={() => { setOldOnly(true); setOpen(new Set(["safe", "look"])); }}>Show them</button>
+        </div>
+      )}
 
       <div className="flex min-h-0 flex-1 gap-4">
         <div className="min-w-0 flex-1 overflow-auto rounded-[10px] border bg-white divider dark:bg-slate-900">
@@ -299,7 +320,7 @@ export function CleanView(props: {
               <section key={group} aria-label={GROUP_LABEL[group]}>
                 <GroupHeader icon={icon} title={GROUP_LABEL[group]}
                   detail={list.length ? `${list.length} item${list.length === 1 ? "" : "s"} · ${hint}` : group === "safe" && scanning ? "Looking…" : "Nothing here"}
-                  bytes={totals[group]} open={isOpen} onToggleOpen={() => setOpen((s) => { const n = new Set(s); n.has(group) ? n.delete(group) : n.add(group); return n; })}
+                  bytes={oldOnly ? list.reduce((s, r) => s + r.bytes, 0) : totals[group]} open={isOpen} onToggleOpen={() => setOpen((s) => { const n = new Set(s); n.has(group) ? n.delete(group) : n.add(group); return n; })}
                   {...(tick?.any ? { checked: tick.all, partial: !tick.all && tick.some, onToggle: tick.toggle } : {})} />
                 {isOpen && list.map(row)}
               </section>
@@ -318,6 +339,7 @@ export function CleanView(props: {
           <button className="btn btn-ghost btn-sm" onClick={() => setUndoNote(null)} aria-label="Dismiss"><Icon name="x" /></button>
         </div>
       )}
+      {!plan.length && !busy && !result && !undoNote && <div className="mt-3"><ReminderToggle settings={settings} onChange={props.onChangeSettings} compact /></div>}
       {(plan.length > 0 || busy) && <SelectionBar count={plan.length} bytes={planBytes} noun="item" permanent={permanent} dryRun={settings.dry_run} busy={busy} onClear={() => { setSelP(new Set()); setSelG(new Set()); }} onClean={clean} blockedReason={cleanBlocked} />}
       {dialogs}
     </div>

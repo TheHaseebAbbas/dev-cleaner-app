@@ -4,6 +4,8 @@
 
 A desktop app that finds and removes the junk developer tools leave behind: `node_modules`, build output, package caches, SDK downloads, simulators and IDE caches. It runs on Windows, macOS and Linux.
 
+<p align="center"><img src="docs/images/clean-light.png" width="840" alt="The Clean page: 3.9 GB safe to clean, grouped into Safe to clean, Worth a look and Leaving alone"></p>
+
 **Safe by default.** Nothing is deleted until you tick it and confirm. Every item is sorted into Safe to clean, Worth a look or Leaving alone with a plain reason, folders Git tracks, system folders and folders holding keys cannot be selected, and each item is checked again right before it is removed. Removed folders go to the Trash and a dry-run mode lets you rehearse. See [Safety](docs/SAFETY.md).
 
 ## What you get

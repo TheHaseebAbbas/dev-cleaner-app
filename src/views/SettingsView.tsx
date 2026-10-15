@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { api, CONFIDENCE_LABEL, COST_LABEL, fmtAge, fmtBytes, fmtDuration, fmtUntil, RISK_LABEL, type Confidence, type Diagnostics, type Risk, type Rule, type RuleTestResult, type ScheduleStatus, type Settings } from "../api";
+import { ReminderToggle } from "../components/Reminder";
 import { Icon, type IconName } from "../ui/Icon";
 import { Badge, Disclosure, PageHeader, Segmented, Spinner, Toggle } from "../ui/primitives";
 
@@ -43,6 +44,7 @@ function PathList(props: { title: string; hint: string; values: string[]; onChan
 }
 
 const RETENTION_PRESETS = [0, 7, 14, 30, 90];
+const GiB = 1024 ** 3;
 
 function Num(props: { value: number; min: number; max?: number; suffix: string; onChange: (n: number) => void }) {
   return <div className="flex items-center gap-2"><input className="input w-20 text-right" type="number" min={props.min} max={props.max} value={props.value} onChange={(e) => props.onChange(Number(e.target.value))} /><span className="muted text-sm">{props.suffix}</span></div>;
@@ -165,6 +167,11 @@ function ScheduleSection({ s, set }: { s: Settings; set: <K extends keyof Settin
           <Field label="Then" hint="Moving to Trash never deletes permanently and skips anything with a warning, in use, protected or needing confirmation.">
             <Segmented value={sc.action} onChange={(v) => put({ action: v })} options={[{ value: "remind", label: "Just tell me" }, { value: "clean", label: "Move to Trash" }]} />
           </Field>
+          {sc.action === "remind" && (
+            <Field label="Tell me when at least" hint="Only after a complete scan, and only when something new turns up.">
+              <Segmented value={String(Math.round((sc.min_bytes || 5 * GiB) / GiB))} onChange={(v) => put({ min_bytes: Number(v) * GiB })} options={[1, 5, 10, 20].map((n) => ({ value: String(n), label: `${n} GB` }))} />
+            </Field>
+          )}
         </>
       )}
       <div className="flex items-center justify-between gap-3 border-t pt-3 text-xs divider">
@@ -301,8 +308,8 @@ export function SettingsView(props: { settings: Settings; onChange: (s: Settings
                   options={[{ value: "0", label: "Never" }, { value: "7", label: "7 days" }, { value: "30", label: "30 days" }, { value: "90", label: "90 days" }, ...(retentionPreset ? [] : [{ value: "custom", label: `${s.trash_retention_days} days` }])]} />
               </Field>
             )}
+            <ReminderToggle settings={s} onChange={props.onChange} />
           </Sub>
-          <ScheduleSection s={s} set={set} />
           <Sub title="Appearance">
             <Field label="Theme" hint="System follows your operating system.">
               <Segmented value={s.theme} onChange={(v) => set("theme", v)} options={[{ value: "system", label: "System" }, { value: "light", label: "Light" }, { value: "dark", label: "Dark" }]} />

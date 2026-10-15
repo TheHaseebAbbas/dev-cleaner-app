@@ -548,6 +548,16 @@ fn schedule_tick(app: &AppHandle, force: bool) -> Result<(), String> {
             let ids: Vec<String> = items.iter().filter(|i| schedule::eligible(i, &sched.profile)).map(|i| i.id.clone()).collect();
             r.matched = ids.len();
             r.matched_bytes = items.iter().filter(|i| ids.contains(&i.id)).map(|i| i.reclaimable_bytes).sum();
+            if sched.action == ScheduleAction::Remind {
+                let found: Vec<(String, u64)> = items.iter().filter(|i| ids.contains(&i.id)).map(|i| (i.path.clone(), i.reclaimable_bytes)).collect();
+                if let Ok(f) = schedule_file(app) {
+                    let mut st = ScheduleState::load(&f);
+                    let (tell, seen) = schedule::reminder(summary.complete, &found, sched.min_bytes, &st.reminded);
+                    r.notify = tell;
+                    st.reminded = seen;
+                    let _ = st.save(&f);
+                }
+            }
             if sched.action == ScheduleAction::Clean && !ids.is_empty() {
                 let mut planned = plan::resolve_items(items, Some(summary), &summary.scan_id, &ids, settings.dry_run);
                 plan::annotate(&mut planned, settings.detect_active_usage, &settings.unconfirmed_custom_rules());
