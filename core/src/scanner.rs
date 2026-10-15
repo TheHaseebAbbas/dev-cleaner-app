@@ -5,7 +5,7 @@
 //! files → risk and confidence → recommendation. Only then is it offered for selection.
 
 pub use crate::model::{Level, Warning};
-use crate::model::{Block, BlockSource, Category, Confidence, Cost, Fingerprint, GitStatus, Reason, Recommendation, Risk};
+use crate::model::{Block, BlockSource, Category, CleanGroup, Confidence, Cost, Fingerprint, GitStatus, Reason, Recommendation, Risk};
 use crate::recommend::{self, Facts};
 use crate::inuse::{ActiveUse, Snapshot};
 use crate::references::{Refs, REFERENCE_FILES};
@@ -128,6 +128,9 @@ pub struct Part {
     /// For parts of split project folders: active, recent or old.
     #[serde(default)]
     pub activity: Option<PartActivity>,
+    /// Safe to clean, Worth a look or Leaving alone (see `recommend::group`).
+    #[serde(default)]
+    pub clean_group: CleanGroup,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -188,6 +191,9 @@ pub struct Item {
     pub workspace: Option<WorkspaceInfo>,
     #[serde(default)]
     pub in_use: Option<ActiveUse>,
+    /// Safe to clean, Worth a look or Leaving alone (see `recommend::group`).
+    #[serde(default)]
+    pub clean_group: crate::model::CleanGroup,
 }
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -366,6 +372,7 @@ pub fn parts_measure(path: &Path, files: bool, sensitive: bool) -> (DirStats, Ve
                 is_file: !is_dir,
                 in_use: None,
                 activity: None,
+                clean_group: CleanGroup::Leave,
             }
         })
         .collect();
@@ -968,7 +975,10 @@ pub fn assess(c: &Candidate, opts: &ScanOptions, scan_id: &str, now: u64, ctx: &
         recommendation,
         workspace,
         in_use,
+        clean_group: CleanGroup::Leave,
     };
+    let mut item = item;
+    recommend::group_item(&mut item);
     (item, errors)
 }
 

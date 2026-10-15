@@ -4,7 +4,9 @@
 //! rules are conservative: anything blocked, critical, tracked by Git, in use by a project, or
 //! detected with low confidence is never recommended.
 
-use crate::model::{Block, Category, Confidence, Cost, GitStatus, Level, Reason, Recommendation, Risk, Usage, Verdict, Warning};
+use crate::global::GlobalCache;
+use crate::model::{Block, Category, CleanGroup, Confidence, Cost, GitStatus, Level, Reason, Recommendation, Risk, Usage, Verdict, Warning};
+use crate::scanner::{Item, Part};
 
 /// Everything the engine looks at. Built by the project and global scanners.
 pub struct Facts<'a> {
@@ -195,4 +197,79 @@ pub fn recommend(f: &Facts) -> Recommendation {
         score = score.min(30);
     }
     Recommendation { verdict, score: score as u8, reasons: r }
+}
+
+/// What the grouping looks at, for a project folder, a Tools & SDKs location or one of their parts.
+pub struct GroupFacts<'a> {
+    pub recommendation: Option<&'a Recommendation>,
+    pub risk: Risk,
+    pub blocked: bool,
+    /// Shown but never removed (Docker, WSL).
+    pub view_only: bool,
+    /// Can be ticked as a whole: no blocked part, not parts-only.
+    pub whole_selectable: bool,
+    pub in_use: bool,
+    pub warnings: usize,
+}
+
+/// The one place that decides Safe to clean, Worth a look or Leaving alone. Fails closed: a block,
+/// a missing verdict, Keep or Critical risk is Leaving alone, whatever else says otherwise.
+pub fn group(g: &GroupFacts) -> CleanGroup {
+    if g.view_only || g.blocked {
+        return CleanGroup::Leave;
+    }
+    let Some(r) = g.recommendation else { return CleanGroup::Leave };
+    if matches!(r.verdict, Verdict::Keep | Verdict::Blocked) || g.risk >= Risk::Critical {
+        return CleanGroup::Leave;
+    }
+    if !g.whole_selectable || r.verdict == Verdict::Review || g.in_use || g.warnings > 0 {
+        return CleanGroup::Look;
+    }
+    CleanGroup::Safe
+}
+
+fn busy(u: &Option<crate::inuse::ActiveUse>) -> bool {
+    u.as_ref().is_some_and(|u| u.in_use())
+}
+
+fn group_parts(parts: &mut [Part], owner_risk: Risk, owner_blocked: bool, view_only: bool, owner_warnings: usize) {
+    for p in parts.iter_mut() {
+        p.clean_group = group(&GroupFacts {
+            recommendation: p.recommendation.as_ref(),
+            risk: p.risk.unwrap_or(owner_risk),
+            blocked: owner_blocked || p.block.is_some(),
+            view_only,
+            whole_selectable: true,
+            in_use: busy(&p.in_use),
+            warnings: owner_warnings + usize::from(p.warning.is_some()),
+        });
+    }
+}
+
+/// Sets the group on a project folder and its parts. Call once everything else is known.
+pub fn group_item(i: &mut Item) {
+    group_parts(&mut i.parts, i.risk, i.block.is_some(), false, i.warnings.len());
+    i.clean_group = group(&GroupFacts {
+        recommendation: Some(&i.recommendation),
+        risk: i.risk,
+        blocked: i.block.is_some(),
+        view_only: false,
+        whole_selectable: !i.parts.iter().any(|p| p.block.is_some()),
+        in_use: busy(&i.in_use),
+        warnings: i.warnings.len(),
+    });
+}
+
+/// Sets the group on a Tools & SDKs location and its parts.
+pub fn group_cache(c: &mut GlobalCache) {
+    group_parts(&mut c.parts, c.risk, c.block.is_some(), c.info_only, c.warnings.len());
+    c.clean_group = group(&GroupFacts {
+        recommendation: Some(&c.recommendation),
+        risk: c.risk,
+        blocked: c.block.is_some(),
+        view_only: c.info_only,
+        whole_selectable: !c.parts_only && !c.parts.iter().any(|p| p.block.is_some()),
+        in_use: busy(&c.in_use),
+        warnings: c.warnings.len(),
+    });
 }

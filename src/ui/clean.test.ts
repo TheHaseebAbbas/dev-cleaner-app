@@ -16,42 +16,23 @@ const item = (over: Partial<Candidate & { id: string; size: number }> = {}) => (
   regenerates_with: "npm ci",
   ...over,
 });
-const part = (over: Partial<Part> = {}): Part => ({ id: "p", path: "/x/p", name: "p", disk_bytes: 1, apparent_bytes: 1, reclaimable_bytes: 1, file_count: 1, last_modified: 0, is_file: false, ...over });
 
 describe("groupOf", () => {
-  it("puts a plain recommended item in Safe to clean", () => {
-    expect(groupOf(item())).toBe("safe");
+  it("reads the group the core decided", () => {
+    expect(groupOf(item({ clean_group: "safe" }))).toBe("safe");
+    expect(groupOf(item({ clean_group: "look" }))).toBe("look");
   });
-  it("never lets a recommendation beat a block", () => {
-    expect(groupOf(item({ block: { source: "git", reason: "Git tracks files inside it." } }))).toBe("leave");
-  });
-  it("treats a missing verdict as Leaving alone", () => {
-    expect(groupOf(item({ recommendation: undefined }))).toBe("leave");
-    expect(groupOf(item({ recommendation: null }))).toBe("leave");
-  });
-  it("keeps critical risk out of Safe to clean even when recommended", () => {
-    expect(groupOf(item({ risk: "critical" }))).toBe("leave");
-  });
-  it("moves recommended items that are in use or carry a warning to Worth a look", () => {
-    expect(groupOf(item({ in_use: { status: "in_use", by: ["cargo"], locked_files: 0, locked_bytes: 0 } }))).toBe("look");
-    expect(groupOf(item({ warnings: [{ level: "caution", message: "Not in .gitignore" }] }))).toBe("look");
-  });
-  it("sends view-only, parts-only and partly blocked items out of Safe to clean", () => {
-    expect(groupOf(item({ info_only: true }))).toBe("leave");
-    expect(groupOf(item({ parts_only: true }))).toBe("look");
-    expect(groupOf(item({ parts: [part({ block: { source: "user", reason: "Protected path" } })] }))).toBe("look");
-  });
-  it("maps review and keep verdicts", () => {
-    expect(groupOf(item({ recommendation: rec("review") }))).toBe("look");
-    expect(groupOf(item({ recommendation: rec("keep") }))).toBe("leave");
+  it("treats a missing group as Leaving alone", () => {
+    expect(groupOf(item())).toBe("leave");
+    expect(groupOf(item({ clean_group: null }))).toBe("leave");
   });
 });
 
 describe("totals and pre-selection", () => {
   const list = [
-    item({ id: "safe", size: 100 }),
-    item({ id: "review", size: 50, recommendation: rec("review") }),
-    item({ id: "keep", size: 30, recommendation: rec("keep") }),
+    item({ id: "safe", size: 100, clean_group: "safe" }),
+    item({ id: "review", size: 50, recommendation: rec("review"), clean_group: "look" }),
+    item({ id: "keep", size: 30, recommendation: rec("keep"), clean_group: "leave" }),
     item({ id: "blocked", size: 20, block: { source: "system", reason: "System folder" } }),
     item({ id: "docker", size: 1000, info_only: true }),
   ];
@@ -73,14 +54,14 @@ describe("totals and pre-selection", () => {
 
 describe("reasonLine", () => {
   it("says how a safe item comes back", () => {
-    expect(reasonLine(item({ recommendation: rec("recommended", [{ ok: true, text: "Frees about 1 GB" }, { ok: true, text: "Not changed for 45 days" }]) }))).toBe("Comes back with npm ci. Not changed for 45 days.");
+    expect(reasonLine(item({ clean_group: "safe", recommendation: rec("recommended", [{ ok: true, text: "Frees about 1 GB" }, { ok: true, text: "Not changed for 45 days" }]) }))).toBe("Comes back with npm ci. Not changed for 45 days.");
   });
   it("names the program using an item", () => {
-    expect(reasonLine(item({ in_use: { status: "in_use", by: ["cargo"], locked_files: 0, locked_bytes: 0 } }))).toBe("cargo is using it right now.");
+    expect(reasonLine(item({ clean_group: "look", in_use: { status: "in_use", by: ["cargo"], locked_files: 0, locked_bytes: 0 } }))).toBe("cargo is using it right now.");
   });
   it("leads with the reason against, not size or confidence", () => {
     const r = rec("keep", [{ ok: false, text: "Small (2 KB)" }, { ok: false, text: "Used by app, web" }]);
-    expect(reasonLine(item({ recommendation: r }))).toBe("Used by app, web.");
+    expect(reasonLine(item({ clean_group: "leave", recommendation: r }))).toBe("Used by app, web.");
   });
 });
 

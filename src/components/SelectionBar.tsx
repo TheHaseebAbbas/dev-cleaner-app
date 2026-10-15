@@ -18,7 +18,7 @@ export function SelectionBar(props: { count: number; bytes: number; noun: string
       <div className="flex shrink-0 items-center gap-2">
         <button className="btn btn-ghost" onClick={props.onClear} disabled={props.busy}>Clear</button>
         <button className={`btn ${props.permanent && !props.dryRun ? "btn-danger" : "btn-primary"} px-4`} onClick={props.onClean} disabled={props.busy || !!props.blockedReason}>
-          {props.busy ? <><Spinner />Cleaning…</> : <>Reclaim {fmtBytes(props.bytes)}</>}
+          {props.busy ? <><Spinner />Cleaning…</> : props.dryRun ? <>Simulate cleanup</> : props.permanent ? <>Delete {fmtBytes(props.bytes)} permanently</> : <>Move {fmtBytes(props.bytes)} to Trash</>}
         </button>
       </div>
     </div>

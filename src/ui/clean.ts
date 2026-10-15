@@ -1,11 +1,11 @@
-import { inUse, type ActiveUse, type Block, type BlockSource, type CleanupProfile, type DeleteMode, type Part, type Recommendation, type Risk, type Warning } from "../api";
+import { inUse, type ActiveUse, type CleanGroup, type Block, type BlockSource, type CleanupProfile, type DeleteMode, type Part, type Recommendation, type Risk, type Warning } from "../api";
 
 /**
- * How every screen sorts results for people: one place decides, so no view makes up its own idea
- * of what is safe. Anything unclear falls to the more careful group. The backend still checks every
- * item again before removing it, whatever is selected here.
+ * How every screen sorts results for people. The core decides the group (`recommend::group`), so
+ * no view makes up its own idea of what is safe; an item without one is Leaving alone. The backend
+ * still checks every item again before removing it, whatever is selected here.
  */
-export type CleanGroup = "safe" | "look" | "leave";
+export type { CleanGroup };
 
 export const GROUP_LABEL: Record<CleanGroup, string> = {
   safe: "Safe to clean",
@@ -24,6 +24,8 @@ export const BLOCK_LABEL: Record<BlockSource, string> = {
 
 /** What the grouping looks at. Project folders and Tools & SDKs locations both fit. */
 export interface Candidate {
+  /** Set by the core. */
+  clean_group?: CleanGroup | null;
   block: Block | null | undefined;
   recommendation?: Recommendation | null;
   warnings: Warning[];
@@ -40,13 +42,8 @@ export interface Candidate {
 /** The whole item can be ticked: not blocked, no blocked part, not parts-only, not view-only. */
 export const wholeSelectable = (c: Candidate) => !c.info_only && !c.block && !c.parts_only && !c.parts.some((p) => p.block);
 
-export function groupOf(c: Candidate): CleanGroup {
-  if (c.info_only || c.block) return "leave";
-  const v = c.recommendation?.verdict;
-  if (!v || v === "blocked" || v === "keep" || c.risk === "critical" || c.risk === "blocked") return "leave";
-  if (!wholeSelectable(c)) return "look";
-  if (v === "review" || inUse(c.in_use) || c.warnings.length > 0) return "look";
-  return v === "recommended" ? "safe" : "leave";
+export function groupOf(c: Pick<Candidate, "clean_group">): CleanGroup {
+  return c.clean_group ?? "leave";
 }
 
 const RANK: Record<CleanGroup, number> = { safe: 0, look: 1, leave: 2 };

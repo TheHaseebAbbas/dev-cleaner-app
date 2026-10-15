@@ -55,7 +55,7 @@ export function ConfirmDialog(props: { entries: PlanEntry[]; preview: Preview | 
               <p className="mt-1 text-[13px]">The selected {noun}s may be required by your development tools and will need to be generated or downloaded again. {amount} will be reclaimed from {plural}.</p>
             </>
           ) : (
-            <p className="text-[13px]"><b className="tabular-nums">{amount}</b> will be reclaimed. The {noun}s can be restored from Trash.</p>
+            <p className="text-[13px]">Moves <b className="tabular-nums">{amount}</b>{st.show_reclaim_estimate ? " (estimate)" : ""} to the Trash. You can restore them from Trash; the space comes back when the Trash is emptied.</p>
           )}
           {st.show_network_recovery_cost && pv.download_bytes > 0 && <p className="muted mt-1.5 text-xs">Getting them back may download up to {fmtBytes(pv.download_bytes)}.</p>}
           {stale && <p className="mt-1.5 flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-300"><Icon name="clock" className="h-3.5 w-3.5" />This scan is {staleMin} minutes old. Each {noun} is checked again before it is removed.</p>}
@@ -106,21 +106,27 @@ export function ConfirmDialog(props: { entries: PlanEntry[]; preview: Preview | 
 }
 
 /** Quiet result line after a cleanup; details open in a dialog only when asked or when nothing worked. */
-export function CleanupNotice({ report, noun, onDetails, onClose }: { report: DeleteReport; noun: string; onDetails: () => void; onClose: () => void }) {
+export function CleanupNotice({ report, noun, onDetails, onClose, onUndo }: { report: DeleteReport; noun: string; onDetails: () => void; onClose: () => void; onUndo?: () => Promise<void> }) {
+  const [undoing, setUndoing] = useState(false);
   const bad = report.outcomes.filter((o) => !o.ok).length;
   const n = report.removed;
-  const what = `${n} ${noun}${n === 1 ? "" : "s"}`;
+  const total = n + bad;
+  const what = bad > 0 ? `${n} of ${total} ${noun}s` : `${n} ${noun}${n === 1 ? "" : "s"}`;
+  // A move to Trash frees nothing yet, so it never says "reclaimed".
   const text = report.dry_run
     ? `Dry run: ${what} would be removed · ${fmtBytes(report.estimated_bytes)}`
-    : report.mode === "trash" ? `Moved ${what} to Trash · ${fmtBytes(report.estimated_bytes)}` : `Deleted ${what} · ${fmtBytes(report.estimated_bytes)} reclaimed`;
+    : report.mode === "trash" ? `Moved ${what} to Trash (${fmtBytes(report.estimated_bytes)}). Space comes back when the Trash is emptied.` : `Deleted ${what} · ${fmtBytes(report.estimated_bytes)} reclaimed`;
   const failedAll = n === 0 && bad > 0;
   return (
     <div role="status" className="rise mt-3 flex items-center gap-3 rounded-[10px] border px-4 py-2.5 text-[13px] divider">
       <Icon name={failedAll ? "x-circle" : "check-circle"} className={`h-4 w-4 ${failedAll ? "text-red-600 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}`} />
       <span className="min-w-0 flex-1 truncate">
         {failedAll ? "Cleanup failed. Nothing was removed." : text}
-        {bad > 0 && !failedAll && <span className="text-amber-700 dark:text-amber-300"> · {bad} not removed</span>}
+        {bad > 0 && !failedAll && report.mode !== "trash" && <span className="text-amber-700 dark:text-amber-300"> · {bad} not removed</span>}
       </span>
+      {onUndo && n > 0 && !report.dry_run && report.mode === "trash" && (
+        <button className="btn btn-sm" disabled={undoing} onClick={() => { setUndoing(true); onUndo().finally(() => setUndoing(false)); }}>{undoing ? <Spinner /> : <Icon name="refresh" className="h-3.5 w-3.5" />}Undo</button>
+      )}
       <button className="btn btn-ghost btn-sm" onClick={onDetails}>Details</button>
       <button className="btn btn-ghost btn-sm" onClick={onClose} aria-label="Dismiss"><Icon name="x" /></button>
     </div>

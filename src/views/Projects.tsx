@@ -27,7 +27,7 @@ const PROFILES: { value: CleanupProfile; label: string; hint: string }[] = [
 const MOD = typeof navigator !== "undefined" && /Mac/.test(navigator.platform) ? "⌘" : "Ctrl";
 const hasBlockedPart = (i: Item) => i.parts.some((p) => p.block);
 
-function toModel(i: Item, flat: boolean, verdicts: boolean): RowModel {
+export function toModel(i: Item, flat: boolean, verdicts: boolean): RowModel {
   const partsOnly = !i.block && hasBlockedPart(i);
   return {
     key: i.id,

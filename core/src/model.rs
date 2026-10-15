@@ -219,6 +219,20 @@ pub enum Verdict {
     Blocked,
 }
 
+/// What the screens show for an item: one of three plain groups, decided here so no screen
+/// makes up its own idea of what is safe. Anything unclear falls to the more careful group.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum CleanGroup {
+    /// Recommended, nothing against it, selectable as a whole. Counted in the headline.
+    Safe,
+    /// Probably fine, but in use, flagged, costly, or only cleanable part by part.
+    Look,
+    /// Kept, blocked, critical, view only, or no verdict.
+    #[default]
+    Leave,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Recommendation {
     pub verdict: Verdict,

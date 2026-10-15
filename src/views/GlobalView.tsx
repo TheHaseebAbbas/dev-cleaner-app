@@ -17,7 +17,7 @@ import { VerdictBadge } from "../ui/warnings";
 const VIEW_ONLY_NOTE = "View only. Dev Cleaner can show this location but does not delete it.";
 type View = "locations" | "map";
 
-function toModel(c: GlobalCache, verdicts: boolean): RowModel {
+export function toModel(c: GlobalCache, verdicts: boolean): RowModel {
   const blockedPart = c.parts.some((p) => p.block);
   const state = c.info_only ? "view" : c.block ? "blocked" : c.parts_only || blockedPart ? "parts" : "selectable";
   return {

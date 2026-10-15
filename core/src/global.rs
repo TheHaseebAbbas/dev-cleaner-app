@@ -6,7 +6,7 @@
 //! Locations are resolved per OS (home folder, `%LOCALAPPDATA%`, the Android SDK root).
 
 use crate::inuse::{self, ActiveUse, Snapshot};
-use crate::model::{Block, BlockSource, Category, Confidence, Cost, Fingerprint, GitStatus, Level, Recommendation, Risk, Usage, Verdict, Warning};
+use crate::model::{Block, BlockSource, Category, CleanGroup, Confidence, Cost, Fingerprint, GitStatus, Level, Recommendation, Risk, Usage, Verdict, Warning};
 use crate::recommend::{self, Facts};
 use crate::references::Refs;
 use crate::safety;
@@ -58,6 +58,9 @@ pub struct GlobalCache {
     /// Running processes or locked files (when active-use detection is on).
     #[serde(default)]
     pub in_use: Option<ActiveUse>,
+    /// Safe to clean, Worth a look or Leaving alone (see `recommend::group`).
+    #[serde(default)]
+    pub clean_group: crate::model::CleanGroup,
 }
 
 /// A place that is looked at, without measuring it (cheap; used by the "where it looks" dialog).
@@ -403,6 +406,7 @@ fn wsl_distros(env: &Env, scan_id: &str) -> Option<GlobalCache> {
                     fingerprint: Fingerprint::default(),
                     in_use: None,
                     activity: None,
+                    clean_group: CleanGroup::Leave,
                 });
             }
         }
@@ -439,6 +443,7 @@ fn wsl_distros(env: &Env, scan_id: &str) -> Option<GlobalCache> {
         block: Some(block),
         references_checked: false,
         in_use: None,
+        clean_group: CleanGroup::Leave,
         fingerprint: Fingerprint::default(),
     })
 }
@@ -610,7 +615,7 @@ fn measure(t: &Def, path: PathBuf, env: &Env, ctx: &GlobalContext, snap: Option<
         }
     }
 
-    GlobalCache {
+    let mut cache = GlobalCache {
         id: t.id.into(),
         scan_id: ctx.scan_id.clone(),
         name: t.name.into(),
@@ -640,7 +645,10 @@ fn measure(t: &Def, path: PathBuf, env: &Env, ctx: &GlobalContext, snap: Option<
         recommendation,
         references_checked,
         in_use,
-    }
+        clean_group: CleanGroup::Leave,
+    };
+    recommend::group_cache(&mut cache);
+    cache
 }
 
 impl Verdict {
