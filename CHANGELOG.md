@@ -2,6 +2,15 @@
 
 Each release's notes on GitHub include its section from this file. Add a `## <version>` section before tagging a release.
 
+## Unreleased
+
+### Clearer results
+- Every item now lands in one of three groups: **Safe to clean**, **Worth a look** or **Leaving alone**, with one plain sentence on why, in place of the row of badges. Verdict, risk, confidence and score are still in the details panel.
+- The big number at the top counts only Safe to clean items and is labelled as an estimate. Worth a look is shown next to it. Before, it also counted items the app itself said to keep.
+- After a complete scan in Trash mode, Safe to clean items are ticked for you. Nothing is ticked for permanent deletion.
+- Docker and WSL leave the Tools & SDKs list and totals; they are listed once below it as shown but not cleaned.
+- Blocked items use the same words everywhere. Quick select profiles are renamed **No downloads**, **Safe to clean** and **Safe + worth a look**.
+
 ## 1.0.0
 
 The first release of Dev Cleaner as a desktop app for Windows, macOS and Linux.

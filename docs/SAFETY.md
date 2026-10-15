@@ -37,16 +37,18 @@ The backend decides what may be removed. The screens only show its decisions, an
 | Blocked | Never removed. |
 
 ## Recommendations
-Each item gets a verdict and a score from 0 to 100, always shown with its reasons (hover the badge or open the details panel).
+Each item gets a verdict and a score from 0 to 100. The reasons are in the details panel (and in the tooltip on the group badge); the score is under Advanced details.
 
-| Verdict | When |
-| --- | --- |
-| **Recommended** | Safe, or Caution on a project idle for 30 days or more and not expensive to rebuild, with enough confidence and nothing against it. |
-| **Review** | Probably fine, but the project was active in the last 3 days, the match is not certain enough, or it costs a long rebuild or a download. |
-| **Keep** | Critical, used by a scanned project, tracked by Git, or has a red warning. |
-| **Blocked** | Cannot be removed. |
+The screens show each verdict as one of three groups. A blocked item, an item with no verdict, and anything Critical always land in **Leaving alone**. A Recommended item that is in use, has any warning, or can only be cleaned part by part moves to **Worth a look**. Only **Safe to clean** counts toward the headline total, and only Safe to clean items are ticked after a complete scan (in Trash mode only). The backend checks every item again before removing it, whatever is ticked.
 
-*Quick select* picks from the visible list: **Safe** (Recommended items with Safe risk), **Recommended**, or **Deep** (Recommended and Review). It never picks Keep or blocked items.
+| Verdict | Shown as | When |
+| --- | --- | --- |
+| **Recommended** | Safe to clean | Safe, or Caution on a project idle for 30 days or more and not expensive to rebuild, with enough confidence and nothing against it. |
+| **Review** | Worth a look | Probably fine, but the project was active in the last 3 days, the match is not certain enough, or it costs a long rebuild or a download. |
+| **Keep** | Leaving alone | Critical, used by a scanned project, tracked by Git, or has a red warning. |
+| **Blocked** | Leaving alone | Cannot be removed. |
+
+*Quick select* picks from the visible list: **No downloads** (Safe to clean items with Safe risk), **Safe to clean**, or **Safe + worth a look**. It never picks Leaving alone items.
 
 ## What the warnings mean
 | Badge | Reason | What to do |

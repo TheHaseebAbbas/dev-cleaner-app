@@ -502,10 +502,10 @@ export const RISK_LABEL: Record<Risk, string> = {
 };
 
 export const VERDICT_LABEL: Record<Verdict, string> = {
-  recommended: "Recommended",
-  review: "Review",
-  keep: "Keep",
-  blocked: "Blocked",
+  recommended: "Safe to clean",
+  review: "Worth a look",
+  keep: "Leaving alone",
+  blocked: "Leaving alone",
 };
 
 export const COST_LABEL: Record<Cost, string> = {
@@ -584,15 +584,6 @@ export const reclaimOf = (x: { reclaimable_bytes: number; disk_bytes: number }, 
 /** A part's own risk where it has one, else its owner's. */
 export function partRisk(p: Part, owner: Risk): Risk {
   return p.block ? "blocked" : p.risk ?? owner;
-}
-
-/** Ids selected by a quick-select profile. Never includes blocked items. */
-export function profileMatches(i: Item, profile: CleanupProfile): boolean {
-  if (i.block) return false;
-  const v = i.recommendation.verdict;
-  if (profile === "safe") return i.risk === "safe" && v === "recommended";
-  if (profile === "recommended") return v === "recommended";
-  return v === "recommended" || v === "review";
 }
 
 export function fmtBytes(n: number): string {

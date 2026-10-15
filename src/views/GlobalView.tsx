@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { api, ecosystemFamily, failedReport, fmtAge, fmtBytes, fmtDuration, kindLine, reclaimOf, type DeleteReport, type GlobalCache, type Location, type Preview, type Settings } from "../api";
 import { DependencyMap } from "../components/DependencyMap";
 import { Details } from "../components/Details";
@@ -9,6 +9,7 @@ import { ExpandToggle, GroupHeader, TreeRow, type RowModel } from "../components
 import { useCmd } from "../hooks/commands";
 import { useElapsed, type useGlobalScan } from "../hooks/useScans";
 import { checksFor } from "../ui/checks";
+import { groupRank, groupTotals, preselectIds, reasonLine } from "../ui/clean";
 import { Icon } from "../ui/Icon";
 import { Banner, EmptyState, MenuSelect, MetricStrip, PageHeader, SkeletonRows } from "../ui/primitives";
 import { VerdictBadge } from "../ui/warnings";
@@ -28,8 +29,9 @@ function toModel(c: GlobalCache, verdicts: boolean): RowModel {
     state,
     reason: c.info_only ? VIEW_ONLY_NOTE : c.block?.reason ?? (c.parts_only ? "Only individual parts can be removed." : blockedPart ? "Some parts must be kept, so choose parts one at a time." : undefined),
     checks: checksFor({ ...c, viewOnly: c.info_only }),
-    badges: verdicts && state === "selectable" ? <VerdictBadge rec={c.recommendation} block={c.block} /> : undefined,
-    owner: { category: c.category, warnings: c.warnings, block: c.block },
+    note: verdicts ? reasonLine(c) : undefined,
+    badges: verdicts && !c.info_only ? <VerdictBadge item={c} /> : undefined,
+    owner: { category: c.category, warnings: c.warnings, block: c.block, risk: c.risk },
   };
 }
 
@@ -54,18 +56,20 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
   useEffect(() => { if (status === "done") api.getLocations().then((l) => setMissing(l.global.filter((g) => !g.exists))).catch(() => {}); }, [status]);
 
   const flip = (s: Set<string>, k: string) => { const n = new Set(s); n.has(k) ? n.delete(k) : n.add(k); return n; };
-  const sorted = useMemo(() => [...caches].sort((a, b) => Number(a.info_only) - Number(b.info_only) || b.disk_bytes - a.disk_bytes), [caches]);
+  const sorted = useMemo(() => [...caches].sort((a, b) => Number(a.info_only) - Number(b.info_only) || (verdicts ? groupRank(a) - groupRank(b) : 0) || b.disk_bytes - a.disk_bytes), [caches, verdicts]);
   const removable = sorted.filter((c) => !c.info_only);
-  const viewOnlyCount = sorted.length - removable.length;
-  const maxBytes = sorted.reduce((m, c) => Math.max(m, c.disk_bytes), 0);
+  // Docker and WSL are shown but never cleaned, so they stay out of the list and the totals.
+  const viewOnly = sorted.filter((c) => c.info_only);
+  const totals = groupTotals(removable, (c) => reclaimOf(c, est));
+  const maxBytes = removable.reduce((m, c) => Math.max(m, c.disk_bytes), 0);
   const total = removable.filter((c) => !c.block).reduce((s, c) => s + reclaimOf(c, est), 0);
   const focusCache = caches.find((c) => c.id === focus) ?? null;
   const groups = useMemo(() => {
     const m = new Map<string, GlobalCache[]>();
-    for (const c of sorted) m.set(ecosystemFamily(c.ecosystem), [...(m.get(ecosystemFamily(c.ecosystem)) ?? []), c]);
+    for (const c of removable) m.set(ecosystemFamily(c.ecosystem), [...(m.get(ecosystemFamily(c.ecosystem)) ?? []), c]);
     return [...m.entries()].map(([name, list]) => ({ name, list, bytes: list.filter((c) => !c.info_only).reduce((s, c) => s + c.disk_bytes, 0), viewOnly: list.every((c) => c.info_only) }))
       .sort((a, b) => Number(a.viewOnly) - Number(b.viewOnly) || b.bytes - a.bytes);
-  }, [sorted]);
+  }, [removable]);
 
   const withParts = sorted.filter((c) => c.parts.length);
   const allOpen = groups.every((g) => !collapsed.has(g.name)) && withParts.every((c) => open.has(c.id));
@@ -83,6 +87,14 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
   const ids = () => plan.filter((e) => e.whole).map((e) => e.id);
   const partIds = () => plan.filter((e) => !e.whole).map((e) => e.id);
   const scanning = status === "scanning";
+
+  // After a complete scan, tick every Safe to clean location once; a rescan has a new id.
+  const preselected = useRef("");
+  useEffect(() => {
+    if (status !== "done" || !verdicts || !scanId || preselected.current === scanId) return;
+    preselected.current = scanId;
+    setSel(new Set(preselectIds(removable, settings.delete_mode)));
+  }, [status, verdicts, scanId, removable, settings.delete_mode]);
   const cleanBlocked = scanning ? "Wait for the scan to finish" : status === "stopped" ? "The scan did not finish. Run a full scan to clean." : undefined;
 
   async function run(ack: boolean) {
@@ -201,7 +213,9 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
   return (
     <div className="flex h-full flex-col">
       {header()}
-      <MetricStrip note={note} items={[{ label: "Reclaimable", value: fmtBytes(total), hero: true }, { label: "Locations", value: removable.length }, ...(viewOnlyCount ? [{ label: "View only", value: viewOnlyCount }] : [])]} />
+      <MetricStrip note={note} items={verdicts
+        ? [{ label: "You can safely clean", hint: "estimate", value: fmtBytes(totals.safe), hero: true }, { label: "Worth a look", value: fmtBytes(totals.look) }, { label: "Locations", value: removable.length }]
+        : [{ label: "Reclaimable", value: fmtBytes(total), hero: true }, { label: "Locations", value: removable.length }]} />
       {panel}
       {status === "stopped" && <div className="mb-3"><Banner tone="amber" icon="stop" title="Partial scan" actions={<button className="btn btn-sm" onClick={scan.start}>Scan again</button>}>Results so far are shown. Cleaning is turned off until a full scan finishes.</Banner></div>}
       <div className="mb-3 flex items-center gap-2">
@@ -224,6 +238,16 @@ export function GlobalView(props: { scan: ReturnType<typeof useGlobalScan>; sett
                   {!collapsed.has(g.name) && g.list.map(row)}
                 </div>
               ))}
+              {viewOnly.length > 0 && (
+                <ul className="border-b px-4 py-3 text-xs divider" aria-label="Shown but not cleaned">
+                  {viewOnly.map((c) => (
+                    <li key={c.id} className="muted flex items-center gap-2 py-0.5">
+                      <Icon name="eye" className="h-3.5 w-3.5 shrink-0" />
+                      <span className="min-w-0"><button className="font-medium text-slate-700 hover:underline dark:text-slate-200" onClick={() => setFocus(c.id)}>{c.name}</button> uses {fmtBytes(c.disk_bytes)}. Dev Cleaner shows it but does not clean it.</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
               {missing.length > 0 && !scanning && (
                 <div className="muted flex items-center gap-2 px-4 py-3 text-xs">
                   <Icon name="info" className="h-3.5 w-3.5" />{missing.length} other known location{missing.length === 1 ? " is" : "s are"} not on this computer.

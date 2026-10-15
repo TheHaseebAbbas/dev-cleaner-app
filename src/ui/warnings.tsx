@@ -1,5 +1,6 @@
-import { RISK_LABEL, VERDICT_LABEL, type Block, type Reason, type Recommendation, type Risk, type Usage, type Warning } from "../api";
+import { RISK_LABEL, type Block, type Reason, type Recommendation, type Risk, type Usage, type Warning } from "../api";
 import { Badge } from "./primitives";
+import { BLOCK_LABEL, GROUP_LABEL, groupOf, type Candidate, type CleanGroup } from "./clean";
 import { Icon } from "./Icon";
 
 export interface WarnEntry {
@@ -63,26 +64,22 @@ export function WarningPanel(props: { entries: WarnEntry[]; ack: boolean; onAck:
   );
 }
 
-const BLOCK_LABEL: Record<Block["source"], string> = {
-  user: "Protected",
-  system: "System folder",
-  git: "Tracked by Git",
-  sensitive: "Contains keys",
-  rule: "Not removable",
-};
-
 /** Why a row cannot be selected. */
 export function BlockBadge({ block }: { block: Block | null | undefined }) {
   if (!block) return null;
   return <Badge icon="lock" title={block.reason}>{BLOCK_LABEL[block.source]}</Badge>;
 }
 
-/** The recommendation engine's verdict, with its score and top reason in the tooltip. */
-export function VerdictBadge({ rec, block }: { rec: Recommendation | null | undefined; block?: Block | null }) {
-  if (!rec || block) return null;
-  const tone = rec.verdict === "recommended" ? "green" : rec.verdict === "review" ? "amber" : "neutral";
-  const title = [`Score ${rec.score} of 100`, ...rec.reasons.map((r) => `${r.ok ? "+" : "−"} ${r.text}`)].join("\n");
-  return <Badge tone={tone} title={title}>{VERDICT_LABEL[rec.verdict]}</Badge>;
+/** The group an item falls in, as a word and a colour; the tooltip lists the engine's reasons. */
+export function GroupBadge({ group, rec }: { group: CleanGroup; rec?: Recommendation | null }) {
+  const tone = group === "safe" ? "green" : group === "look" ? "amber" : "neutral";
+  const title = rec?.reasons.map((r) => `${r.ok ? "+" : "−"} ${r.text}`).join("\n");
+  return <Badge tone={tone} title={title}>{GROUP_LABEL[group]}</Badge>;
+}
+
+/** Badge for anything the grouping understands (folders, locations, parts). */
+export function VerdictBadge({ item }: { item: Candidate }) {
+  return <GroupBadge group={groupOf(item)} rec={item.recommendation} />;
 }
 
 /** Shown only when risk is above Caution, since Safe and Caution are the normal case. */
