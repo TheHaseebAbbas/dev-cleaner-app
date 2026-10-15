@@ -10,6 +10,7 @@ A desktop app that finds and removes the junk developer tools leave behind: `nod
 
 | Page | What it does |
 | --- | --- |
+| **Clean** | The start page. One **Scan** checks your projects and your tools' caches together and sorts everything into **Safe to clean**, **Worth a look** and **Leaving alone**, each with one line saying why. Safe to clean is open and ticked; one button moves it to the Trash, and **Undo** puts it back. |
 | **Projects** | Scans your code folders and lists every rebuildable folder with size, its group (Safe to clean, Worth a look, Leaving alone) and one line saying why. The safe ones are ticked for you after a scan. Folders made of independent pieces expand into sub-items you can remove one by one. |
 | **Tools & SDKs** | Measures caches and SDKs in your user folder (npm, Cargo, Gradle, Android SDK, Xcode, JetBrains, VS Code caches and more), grouped by ecosystem. A **Dependency map** view shows which installed SDK and toolchain versions your projects use, and which they need but are missing. Docker and WSL disks are shown view-only. |
 | **Trash** | Everything Dev Cleaner moved to the Trash, with **Restore** and **Delete forever**, an auto-clear timer, and a per-item **Keep longer** option. |
@@ -43,11 +44,11 @@ The builds are not code-signed yet, so your system warns the first time you open
 
 1. [Download](#download) and open the app, or run it from source (see the setup guide for your system below).
 2. On first launch, choose the folder that holds your projects, for example `C:\development` or `~/code`. You can change it later in **Settings → Scanning**.
-3. Go to **Projects** and press **Scan projects**.
-4. Tick what you want gone, or keep the Safe to clean folders that are already ticked. Use the arrow on a row to pick only some parts.
-5. Press **Reclaim** in the bar that appears, then confirm.
+3. On the **Clean** page, press **Scan**.
+4. Keep the Safe to clean items that are already ticked, or open **Worth a look** and tick more. Use the arrow on a row to pick only some parts.
+5. Press **Move to Trash** in the bar at the bottom, then confirm. **Undo** on the result line puts everything back.
 
-Press **Ctrl/Cmd+K** for the command palette. Shortcuts: Ctrl/Cmd+R scan, Ctrl/Cmd+A select visible, Ctrl/Cmd+, settings, Esc clear, Delete reclaim.
+Press **Ctrl/Cmd+K** for the command palette. Shortcuts: Ctrl/Cmd+R scan, Ctrl/Cmd+A select visible, Ctrl/Cmd+, settings, Esc clear, Delete cleans the selection.
 
 Tip: turn on **Dry run** in Settings for your first try. It reports what would be freed without touching anything.
 

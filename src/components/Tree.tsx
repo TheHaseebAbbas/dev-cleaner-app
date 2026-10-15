@@ -1,9 +1,9 @@
 import type { ReactNode } from "react";
 import { fmtAge, fmtBytes, type Block, type Category, type Part, type PartActivity, type Risk, type Warning } from "../api";
 import { partChecks } from "../ui/checks";
-import { Icon } from "../ui/Icon";
+import { Icon, type IconName } from "../ui/Icon";
 import { Checkbox, SizeBar } from "../ui/primitives";
-import { SafetyLine, VerdictBadge, type Check } from "../ui/warnings";
+import { GroupBadge, SafetyLine, type Check } from "../ui/warnings";
 
 /** Tree geometry in px: left padding, indent per level, chevron slot, gap, checkbox. */
 const PAD = 12;
@@ -161,7 +161,7 @@ export function TreeRow(props: {
                   <div className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-2">
                       <span className="truncate font-mono text-[13px]" title={p.path}>{p.name}</span>
-                      {m.state !== "view" && p.recommendation && <VerdictBadge item={{ block: p.block, recommendation: p.recommendation, warnings: [...m.owner.warnings, ...(p.warning ? [p.warning] : [])], risk: p.risk ?? m.owner.risk, in_use: p.in_use, parts: [] }} />}
+                      {m.state !== "view" && p.recommendation && <GroupBadge group={p.clean_group ?? "leave"} rec={p.recommendation} />}
                     </div>
                     <div className="flex min-w-0 items-center gap-3">
                       <span className="faint shrink-0 text-xs">{p.is_file ? "file" : `${p.file_count.toLocaleString()} files`} · {p.activity && p.activity !== "active" ? ACTIVITY_TEXT[p.activity] : `changed ${fmtAge(p.last_modified)}`}</span>
@@ -184,7 +184,7 @@ export function TreeRow(props: {
 }
 
 /** A collapsible group header (a project or a category). Always the top level of the tree. */
-export function GroupHeader(props: { icon: "folder" | "box" | "eye"; title: string; path?: string; detail?: string; bytes: number; open: boolean; onToggleOpen: () => void; checked?: boolean; partial?: boolean; onToggle?: () => void }) {
+export function GroupHeader(props: { icon: IconName; title: string; path?: string; detail?: string; bytes: number; open: boolean; onToggleOpen: () => void; checked?: boolean; partial?: boolean; onToggle?: () => void }) {
   return (
     <div
       role="button"

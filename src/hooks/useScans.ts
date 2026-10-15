@@ -38,6 +38,8 @@ export function useScan() {
   const [startedAt, setStartedAt] = useState(0);
   const itemKey = useCallback((i: Item) => i.id, []);
   const batch = useBatcher<Item>(itemKey, setItems);
+  // Bumped on every start: results fetched for an older scan are dropped, never shown over a newer one.
+  const gen = useRef(0);
 
   useEffect(() => {
     const subs: Promise<UnlistenFn>[] = [
@@ -47,20 +49,22 @@ export function useScan() {
         batch.flush();
         setSummary(e.payload);
         setStatus(e.payload.cancelled ? "stopped" : "done");
-        api.getItems().then(setItems);
+        const g = gen.current;
+        api.getItems().then((list) => { if (g === gen.current) setItems(list); });
       }),
     ];
     return () => { subs.forEach((p) => p.then((f) => f())); };
   }, [batch]);
 
   const start = useCallback(async () => {
+    gen.current++;
     batch.clear(); setItems([]); setSummary(null); setError(null); setProgress(null);
     setStartedAt(Date.now());
     setStatus("scanning");
     try { await api.startScan(); } catch (e) { setError(String(e)); setStatus("error"); }
   }, [batch]);
   const stop = useCallback(() => { api.cancelScan(); }, []);
-  const refresh = useCallback(() => api.getItems().then(setItems), []);
+  const refresh = useCallback(() => { const g = gen.current; return api.getItems().then((list) => { if (g === gen.current) setItems(list); }); }, []);
   return { status, items, progress, summary, error, startedAt, start, stop, refresh };
 }
 
@@ -73,6 +77,7 @@ export function useGlobalScan() {
   const [startedAt, setStartedAt] = useState(0);
   const key = useCallback((c: GlobalCache) => c.id, []);
   const batch = useBatcher<GlobalCache>(key, setCaches);
+  const gen = useRef(0);
 
   useEffect(() => {
     const subs: Promise<UnlistenFn>[] = [
@@ -82,20 +87,22 @@ export function useGlobalScan() {
         batch.flush();
         setSummary(e.payload);
         setStatus(e.payload.cancelled ? "stopped" : "done");
-        api.getGlobals().then(setCaches);
+        const g = gen.current;
+        api.getGlobals().then((list) => { if (g === gen.current) setCaches(list); });
       }),
     ];
     return () => { subs.forEach((p) => p.then((f) => f())); };
   }, [batch]);
 
   const start = useCallback(async () => {
+    gen.current++;
     batch.clear(); setCaches([]); setSummary(null); setError(null); setProgress(null);
     setStartedAt(Date.now());
     setStatus("scanning");
     try { await api.startGlobalScan(); } catch (e) { setError(String(e)); setStatus("error"); }
   }, [batch]);
   const stop = useCallback(() => { api.cancelGlobalScan(); }, []);
-  const refresh = useCallback(() => api.getGlobals().then(setCaches), []);
+  const refresh = useCallback(() => { const g = gen.current; return api.getGlobals().then((list) => { if (g === gen.current) setCaches(list); }); }, []);
   return { status, caches, setCaches, progress, summary, error, startedAt, start, stop, refresh };
 }
 

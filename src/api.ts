@@ -13,6 +13,8 @@ export type Verdict = "recommended" | "review" | "keep" | "blocked";
 export type BlockSource = "user" | "system" | "git" | "sensitive" | "rule";
 export type ActivityMode = "fast" | "accurate";
 export type CleanupProfile = "safe" | "recommended" | "deep";
+/** Decided by the core (`recommend::group`); missing means Leaving alone. */
+export type CleanGroup = "safe" | "look" | "leave";
 
 export type Level = "caution" | "danger";
 export interface Warning {
@@ -75,6 +77,7 @@ export interface Part {
   is_file: boolean;
   in_use?: ActiveUse | null;
   activity?: PartActivity | null;
+  clean_group?: CleanGroup;
 }
 
 export interface Item {
@@ -112,6 +115,7 @@ export interface Item {
   recommendation: Recommendation;
   workspace?: WorkspaceInfo | null;
   in_use?: ActiveUse | null;
+  clean_group?: CleanGroup;
 }
 
 export interface Rule {
@@ -204,6 +208,7 @@ export interface GlobalCache {
   recommendation: Recommendation;
   references_checked: boolean;
   in_use?: ActiveUse | null;
+  clean_group?: CleanGroup;
 }
 
 export interface Location {

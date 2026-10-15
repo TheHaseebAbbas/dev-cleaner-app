@@ -8,14 +8,15 @@ import { useGlobalScan, useScan } from "./hooks/useScans";
 import { Icon, type IconName } from "./ui/Icon";
 import { Spinner, Toast } from "./ui/primitives";
 import { GlobalView } from "./views/GlobalView";
+import { CleanView } from "./views/CleanView";
 import { History } from "./views/History";
 import { TrashView } from "./views/TrashView";
 import { Projects } from "./views/Projects";
 import { SettingsView, type SectionId } from "./views/SettingsView";
 
-type Tab = "projects" | "global" | "trash" | "history" | "settings";
+type Tab = "clean" | "projects" | "global" | "trash" | "history" | "settings";
 const GROUPS: { label: string; tabs: { id: Tab; label: string; icon: IconName }[] }[] = [
-  { label: "Clean", tabs: [{ id: "projects", label: "Projects", icon: "folder" }, { id: "global", label: "Tools & SDKs", icon: "database" }] },
+  { label: "Clean", tabs: [{ id: "clean", label: "Clean", icon: "check-circle" }, { id: "projects", label: "Projects", icon: "folder" }, { id: "global", label: "Tools & SDKs", icon: "database" }] },
   { label: "Manage", tabs: [{ id: "trash", label: "Trash", icon: "trash" }, { id: "history", label: "History", icon: "clock" }] },
   { label: "Configure", tabs: [{ id: "settings", label: "Settings", icon: "sliders" }] },
 ];
@@ -61,7 +62,7 @@ function Setup(props: { roots: string[]; onChange: (roots: string[]) => void; on
 }
 
 export default function App() {
-  const [tab, setTab] = useState<Tab>("projects");
+  const [tab, setTab] = useState<Tab>("clean");
   const [settings, setSettings] = useState<Settings | null>(null);
   const [disk, setDisk] = useState<[number, number] | null>(null);
   const [onboarded, setOnboarded] = useState(wasOnboarded);
@@ -78,9 +79,9 @@ export default function App() {
   useEffect(() => {
     if (settings && !launched.current) {
       launched.current = true;
-      if (settings.scan_on_launch && settings.scan_roots.length && wasOnboarded()) scan.start();
+      if (settings.scan_on_launch && settings.scan_roots.length && wasOnboarded()) { scan.start(); globalScan.start(); }
     }
-  }, [settings, scan]);
+  }, [settings, scan, globalScan]);
   useEffect(() => { if (scan.status === "done" || globalScan.status === "done") refreshDisk(); }, [scan.status, globalScan.status, refreshDisk]);
   useEffect(() => {
     const subs = [
@@ -89,7 +90,7 @@ export default function App() {
         const r = e.payload;
         if (r.error) setToast({ tone: "error", text: `Scheduled check could not finish. ${r.error}` });
         else if (r.action === "clean" && r.removed) { refreshDisk(); setToast({ tone: "info", text: `Scheduled cleanup ${r.dry_run ? "would move" : "moved"} ${r.removed} folder${r.removed === 1 ? "" : "s"} to Trash (${fmtBytes(r.removed_bytes)}).` }); }
-        else if (r.matched) setToast({ tone: "info", text: <>Scheduled check: {r.matched} folder{r.matched === 1 ? "" : "s"} ({fmtBytes(r.matched_bytes)}) can be cleaned. <button className="font-medium text-indigo-600 underline dark:text-indigo-300" onClick={() => setTab("projects")}>Review</button></> });
+        else if (r.matched) setToast({ tone: "info", text: <>Scheduled check: {r.matched} folder{r.matched === 1 ? "" : "s"} ({fmtBytes(r.matched_bytes)}) can be cleaned. <button className="font-medium text-indigo-600 underline dark:text-indigo-300" onClick={() => setTab("clean")}>Review</button></> });
       }),
     ];
     return () => { subs.forEach((u) => u.then((f) => f()).catch(() => {})); };
@@ -126,7 +127,8 @@ export default function App() {
 
   const commands: PaletteCommand[] = useMemo(() => !settings ? [] : [
     { id: "search", label: "Search projects and folders", hint: "Ctrl/Cmd+K", icon: "search", run: () => { setTab("projects"); emitCmd("focus-search"); } },
-    { id: "scan-projects", label: "Scan projects", hint: "Ctrl/Cmd+R", icon: "refresh", run: () => goScan("projects") },
+    { id: "scan-all", label: "Scan everything", hint: "Ctrl/Cmd+R", icon: "refresh", run: () => goScan("clean") },
+    { id: "scan-projects", label: "Scan projects", icon: "folder", run: () => goScan("projects") },
     { id: "scan-tools", label: "Scan tools & SDKs", icon: "database", run: () => goScan("global") },
     { id: "map", label: "Open storage map", icon: "map", run: () => { setTab("projects"); emitCmd("storage-map"); } },
     { id: "trash", label: "Open Trash", icon: "trash", run: () => setTab("trash") },
@@ -146,7 +148,7 @@ export default function App() {
       if (mod && e.key.toLowerCase() === "k") { e.preventDefault(); setPalette(false); setTab("projects"); emitCmd("focus-search"); }
       else if (mod && e.shiftKey && e.key.toLowerCase() === "p") { e.preventDefault(); setPalette((p) => !p); }
       else if (mod && e.key === ",") { e.preventDefault(); setSection(null); setTab("settings"); }
-      else if (mod && e.key.toLowerCase() === "r") { e.preventDefault(); if (tab === "projects" || tab === "global") emitCmd("scan"); }
+      else if (mod && e.key.toLowerCase() === "r") { e.preventDefault(); if (tab === "clean" || tab === "projects" || tab === "global") emitCmd("scan"); }
       else if (mod && e.key.toLowerCase() === "a" && !typing) { if (tab === "projects" || tab === "global") { e.preventDefault(); emitCmd("select-all"); } }
       else if (mod && e.key.toLowerCase() === "f") { if (tab === "projects") { e.preventDefault(); emitCmd("focus-search"); } }
       else if (e.key === "/" && !typing && tab === "projects") { e.preventDefault(); emitCmd("focus-search"); }
@@ -164,7 +166,7 @@ export default function App() {
       onDone={() => { markOnboarded(); setOnboarded(true); if (settings.scan_roots.length) setTimeout(() => emitCmd("scan"), 0); }} />;
   }
 
-  const busy = (id: Tab) => (id === "projects" && scan.status === "scanning") || (id === "global" && globalScan.status === "scanning");
+  const busy = (id: Tab) => (id === "clean" && (scan.status === "scanning" || globalScan.status === "scanning")) || (id === "projects" && scan.status === "scanning") || (id === "global" && globalScan.status === "scanning");
   const usedFrac = disk ? 1 - disk[1] / disk[0] : 0;
   const openSettings = () => { setSection(null); setTab("settings"); };
   return (
@@ -205,6 +207,7 @@ export default function App() {
         </div>
       </nav>
       <main className="min-w-0 flex-1 overflow-hidden px-6 py-5">
+        {tab === "clean" && <CleanView scan={scan} globalScan={globalScan} settings={settings} onOpenSettings={openSettings} onDeleted={onDeleted} />}
         {tab === "projects" && <Projects scan={scan} settings={settings} onChangeSettings={updateSettings} onOpenSettings={openSettings} onDeleted={onDeleted} />}
         {tab === "global" && <GlobalView scan={globalScan} settings={settings} onOpenSettings={openSettings} onDeleted={onDeleted} />}
         {tab === "trash" && <TrashView settings={settings} onOpenSettings={openSettings} onChanged={refreshDisk} />}

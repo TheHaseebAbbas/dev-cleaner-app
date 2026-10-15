@@ -11,6 +11,15 @@ Each release's notes on GitHub include its section from this file. Add a `## <ve
 - Docker and WSL leave the Tools & SDKs list and totals; they are listed once below it as shown but not cleaned.
 - Blocked items use the same words everywhere. Quick select profiles are renamed **No downloads**, **Safe to clean** and **Safe + worth a look**.
 
+### One Clean page
+- The app now opens on **Clean**: one Scan checks projects and Tools & SDKs together, and everything they find sits in the three groups with one selection and one button. Projects and Tools & SDKs keep their own pages.
+- Each source shows its own state: Scanning, Done, Partial (with what was missing) or Failed (with the error). A partial or failed source is never shown as an empty result.
+- The group is now decided by the core engine, the same way for every screen. Anything without a verdict is Leaving alone.
+- Results from an older scan can no longer replace a newer one.
+- The confirm dialog and the result line say that a move to Trash frees space only when the Trash is emptied. The button reads **Move X to Trash** (or **Delete X permanently**).
+- The result line shows partial moves ("Moved 3 of 4 items to Trash") and has **Undo**, which restores exactly what was moved and never overwrites a folder that is back.
+- The details panel on Clean is short; the full reasons and numbers sit under **Technical details**.
+
 ## 1.0.0
 
 The first release of Dev Cleaner as a desktop app for Windows, macOS and Linux.

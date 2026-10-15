@@ -23,7 +23,7 @@ const USE_STATUS = { in_use: "In use", not_detected: "Not detected", unknown: "C
  * Right-hand panel for the focused folder or location. Primary information first (size, safety,
  * what removing it does, where it is); rule, Git, filesystem and scoring details on demand.
  */
-export function Details({ item, cache, settings, onClose }: { item?: Item; cache?: GlobalCache; settings: Settings; onClose: () => void }) {
+export function Details({ item, cache, settings, onClose, brief }: { item?: Item; cache?: GlobalCache; settings: Settings; onClose: () => void; brief?: boolean }) {
   const s = item ?? cache!;
   const viewOnly = !!cache?.info_only;
   const name = item ? item.rule_name : cache!.name;
@@ -52,7 +52,7 @@ export function Details({ item, cache, settings, onClose }: { item?: Item; cache
           <div className="muted mt-1 text-xs" title="Files hard-linked from somewhere else stay on disk.">About {fmtBytes(reclaim)} comes back when it is removed.</div>
         )}
 
-        <div className="mt-4"><CheckList checks={checks} /></div>
+        {!brief && <div className="mt-4"><CheckList checks={checks} /></div>}
 
         {s.block && !viewOnly && (
           <div className="mt-3 flex gap-2 rounded-lg border border-slate-300 bg-slate-50 p-2.5 text-xs dark:border-slate-700 dark:bg-slate-800/50">
@@ -68,7 +68,7 @@ export function Details({ item, cache, settings, onClose }: { item?: Item; cache
           <p className="muted mt-1.5 text-xs">Getting it back may download about {fmtBytes(s.download_bytes)}.</p>
         )}
 
-        {verdicts && s.recommendation.reasons.length > 0 && (
+        {verdicts && !brief && s.recommendation.reasons.length > 0 && (
           <>
             <H>{GROUP_LABEL[group]}{group === "safe" ? ": why it is safe to remove" : group === "leave" ? ": why it is kept" : ": what to check first"}</H>
             <ReasonList reasons={s.recommendation.reasons} />
@@ -79,7 +79,14 @@ export function Details({ item, cache, settings, onClose }: { item?: Item; cache
         <div className="mono break-all rounded-lg bg-slate-100 px-2.5 py-2 text-xs dark:bg-slate-800">{s.path}</div>
         <button className="btn mt-2 w-full" onClick={() => api.revealPath(s.path)}><Icon name="external" className="h-4 w-4" />Show in File Manager</button>
 
-        <Disclosure className="mt-5" title="Advanced details">
+        {brief && (verdicts && s.recommendation.reasons.length > 0 || checks.length > 0) && (
+          <Disclosure className="mt-5" title={verdicts ? `Why it is ${GROUP_LABEL[group].toLowerCase()}` : "Safety checks"}>
+            {checks.length > 0 && <CheckList checks={checks} />}
+            {verdicts && s.recommendation.reasons.length > 0 && <div className="mt-2"><ReasonList reasons={s.recommendation.reasons} /></div>}
+          </Disclosure>
+        )}
+
+        <Disclosure className={brief ? "mt-2" : "mt-5"} title={brief ? "Technical details" : "Advanced details"}>
           <div className="rounded-lg border px-3 py-0.5 divider">
             {item && <Row k="Rule" v={<code>{item.rule_id} v{item.rule_version}</code>} />}
             {cache && <Row k="Location id" v={<code>{cache.id}</code>} />}

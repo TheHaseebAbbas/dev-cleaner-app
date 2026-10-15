@@ -3,6 +3,7 @@
 [← Back to the README](../README.md)
 
 ## Contents
+1. [The Clean page](#the-clean-page)
 1. [How the app decides what to show](#how-the-app-decides-what-to-show)
 2. [The Projects page](#the-projects-page)
 3. [The Tools & SDKs page](#the-tools--sdks-page)
@@ -15,19 +16,31 @@
 
 ## Getting around
 
-The sidebar groups the app into **Clean** (Projects, Tools & SDKs), **Manage** (Trash, History) and **Configure** (Settings). The bottom of the sidebar shows free disk space, an amber **Dry run** note when nothing will be deleted, and **Commands**.
+The sidebar groups the app into **Clean** (Clean, Projects, Tools & SDKs), **Manage** (Trash, History) and **Configure** (Settings). The bottom of the sidebar shows free disk space, an amber **Dry run** note when nothing will be deleted, and **Commands**.
 
 | Shortcut | Action |
 | --- | --- |
 | Ctrl/Cmd+K or / | Search projects |
 | Ctrl/Cmd+Shift+P | Command palette: scan, open a page, toggle dark mode or dry run, About |
-| Ctrl/Cmd+R | Scan (or stop) on Projects and Tools & SDKs |
+| Ctrl/Cmd+R | Scan (or stop) on Clean, Projects and Tools & SDKs |
 | Ctrl/Cmd+A | Select everything visible (press again to clear) |
 | Ctrl/Cmd+, | Open Settings |
 | Esc | Close the panel, then clear the selection |
-| Delete | Reclaim the selection (asks first) |
+| Delete | Clean the selection (asks first) |
 
-On first launch a single welcome screen asks for your project folders. Once something is selected, a bar at the bottom shows the size and the button **Reclaim X**. Every folder lands in one group: **Safe to clean**, **Worth a look** or **Leaving alone**, with one line under its name saying why. After a complete scan, every Safe to clean folder is ticked for you (only in Trash mode; nothing is ticked for permanent deletion).
+On first launch a single welcome screen asks for your project folders. Once something is selected, a bar at the bottom shows the size and the button **Move X to Trash** (or **Delete X permanently** in that mode). Every folder lands in one group: **Safe to clean**, **Worth a look** or **Leaving alone**, with one line under its name saying why. After a complete scan, every Safe to clean folder is ticked for you (only in Trash mode; nothing is ticked for permanent deletion).
+
+## The Clean page
+The app opens on **Clean**. Press **Scan** and it checks your project folders and your tools' caches at the same time.
+
+- **Scan status.** One line per source, Projects and Tools & SDKs, says Scanning, Done, Partial (stopped, a scan folder is missing, or something could not be measured) or Failed with the reason, with **Try again**. A source that did not finish is never shown as an empty, clean result.
+- **The headline** is the space in **Safe to clean**, marked as an estimate, with **Worth a look** beside it.
+- **Three groups.** Dev Cleaner's engine puts every item in exactly one: **Safe to clean** (open, and ticked after a complete scan in Trash mode), **Worth a look** (closed; tick what you want) and **Leaving alone** (closed; nothing there can be ticked from this page). An item the engine has no verdict for is always Leaving alone. Opening or closing a group, or opening an item's details, never changes what is ticked.
+- **Details.** Click a row for a short panel: size, what happens if you remove it, how to get it back and where it is. **Why it is safe to clean** and **Technical details** open the full reasons and numbers.
+- **Cleaning.** One button covers projects and tools together, and one dialog confirms it. In Trash mode it says the items move to the Trash and that the space comes back when the Trash is emptied.
+- **Undo.** The result line after a move to Trash has an **Undo** button that restores exactly what was just moved. It never overwrites a folder that has been recreated since.
+
+The **Projects** and **Tools & SDKs** pages are still there for filters, the storage map, the dependency map and picking parts.
 
 ## How the app decides what to show
 Dev Cleaner works from **rules**. A rule says "a folder with this name counts only if this marker file is next to it". For example `node_modules` counts only beside a `package.json`, and Rust's `target` only beside a `Cargo.toml`. A plain folder that happens to be called `build` or `target` is left alone.
@@ -107,9 +120,9 @@ More in [Safety](SAFETY.md).
 
 ## Cleaning
 1. Tick rows or parts. The bar at the bottom shows how many and how much.
-2. Press **Reclaim**. Dev Cleaner checks every selected item again. If **Ask before removing** is on, or anything needs attention, a dialog shows the estimated space, how much may be downloaded again, how many projects are affected, the scan's age, the exact folders, and anything that will be skipped and why.
+2. Press **Move to Trash** (or **Delete permanently**). Dev Cleaner checks every selected item again. If **Ask before removing** is on, or anything needs attention, a dialog shows the estimated space, how much may be downloaded again, how many projects are affected, the scan's age, the exact folders, and anything that will be skipped and why.
 3. Confirm. Folders go to the Trash (default) or are deleted permanently, depending on **Settings → Cleaning**. Each item is checked once more right before it is removed; anything that changed since the scan is skipped.
-4. A result dialog shows the estimated space reclaimed (and, for permanent deletion, how much free space actually grew), with removed, failed, blocked and skipped items listed separately with their reasons. The usual reason for a failure is a file in use by an editor or dev server.
+4. A result line says how many items moved (for example "Moved 3 of 4 items to Trash") with **Undo** and **Details**. A move to the Trash frees no space until the Trash is emptied, so it is never reported as reclaimed. The details show the estimate (and, for permanent deletion, how much free space actually grew), with removed, failed, blocked and skipped items listed separately with their reasons. The usual reason for a failure is a file in use by an editor or dev server.
 
 With **Dry run** on, the same flow runs but nothing is touched.
 
